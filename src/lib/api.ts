@@ -373,6 +373,26 @@ export const importTmdb = createServerFn({ method: "POST" })
   .inputValidator(z.number().int().positive())
   .handler(async ({ data, context }) => tmdb.importTmdb(context.db, context.viewer.id, data));
 
+export const deleteMovie = createServerFn({ method: "POST" })
+  .middleware([adminOnly])
+  .inputValidator(id)
+  .handler(async ({ data, context }) => admin.deleteMovie(context.db, data));
+
+export const deleteCity = createServerFn({ method: "POST" })
+  .middleware([adminOnly])
+  .inputValidator(id)
+  .handler(async ({ data, context }) => admin.deleteCity(context.db, data));
+
+export const deleteCinema = createServerFn({ method: "POST" })
+  .middleware([adminOnly])
+  .inputValidator(id)
+  .handler(async ({ data, context }) => admin.deleteCinema(context.db, data));
+
+export const deleteHall = createServerFn({ method: "POST" })
+  .middleware([adminOnly])
+  .inputValidator(id)
+  .handler(async ({ data, context }) => admin.deleteHall(context.db, data));
+
 export const enrichFromTmdb = createServerFn({ method: "POST" })
   .middleware([adminOnly])
   .handler(async ({ context }) =>

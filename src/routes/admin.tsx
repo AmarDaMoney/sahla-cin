@@ -30,6 +30,10 @@ import {
   fetchCities,
   fetchMovies,
   fetchScreeningsByStatus,
+  deleteCinema,
+  deleteCity,
+  deleteHall,
+  deleteMovie,
   enrichFromTmdb,
   fetchAdminOptions,
   fetchTeam,
@@ -701,13 +705,76 @@ function MoviesTab() {
                 </p>
               </div>
             </div>
-            <Button size="sm" variant="outline" className="rounded-xl" onClick={() => startEdit(m)}>
-              {t.common.edit}
-            </Button>
+            <div className="flex shrink-0 gap-1">
+              <Button
+                size="sm"
+                variant="outline"
+                className="rounded-xl"
+                onClick={() => startEdit(m)}
+              >
+                {t.common.edit}
+              </Button>
+              <DeleteButton
+                name={title(m)}
+                onDelete={async () => {
+                  await deleteMovie({ data: m.id });
+                  if (editing === m.id) {
+                    setEditing(null);
+                    setForm(emptyMovie);
+                  }
+                }}
+                refresh={() => queryClient.invalidateQueries()}
+              />
+            </div>
           </div>
         ))}
       </div>
     </div>
+  );
+}
+
+// Bouton corbeille : demande confirmation, supprime, puis rafraîchit les listes.
+function DeleteButton({
+  name,
+  onDelete,
+  refresh,
+  small,
+  confirm,
+}: {
+  confirm?: string;
+  name: string;
+  onDelete: () => Promise<unknown>;
+  refresh: () => Promise<unknown>;
+  small?: boolean;
+}) {
+  const { t } = useI18n();
+  const run = useRun();
+  const [busy, setBusy] = useState(false);
+
+  async function remove() {
+    if (!window.confirm(confirm ?? t.admin.venues.confirmDelete(name))) return;
+    setBusy(true);
+    const ok = await run(onDelete, t.admin.venues.deleted);
+    setBusy(false);
+    if (ok) await refresh();
+  }
+
+  return (
+    <Button
+      size={small ? "icon" : "sm"}
+      variant="ghost"
+      className={
+        small
+          ? "size-6 rounded-md text-muted-foreground hover:text-destructive"
+          : "rounded-xl text-destructive hover:text-destructive"
+      }
+      disabled={busy}
+      aria-label={`${t.common.delete} ${name}`}
+      title={t.common.delete}
+      onClick={() => void remove()}
+    >
+      <Trash2 className={small ? "size-3.5" : "size-4"} />
+    </Button>
   );
 }
 
@@ -970,18 +1037,63 @@ function VenuesTab() {
       <div className="space-y-2">
         {(cinemas.data ?? []).map((c) => (
           <div key={c.id} className="rounded-xl border border-border bg-card p-3">
-            <p className="text-sm font-medium">
-              {c.name}{" "}
-              <span className="text-muted-foreground">· {c.city ? cityName(c.city) : ""}</span>
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {c.halls.length
-                ? c.halls.map((h) => `${h.name} (${h.capacity})`).join(" · ")
-                : v.noHall}
-            </p>
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-sm font-medium">
+                {c.name}{" "}
+                <span className="text-muted-foreground">· {c.city ? cityName(c.city) : ""}</span>
+              </p>
+              <DeleteButton
+                name={c.name}
+                onDelete={() => deleteCinema({ data: c.id })}
+                refresh={() => queryClient.invalidateQueries()}
+              />
+            </div>
+            {c.halls.length ? (
+              <div className="mt-1 flex flex-wrap gap-1">
+                {c.halls.map((h) => (
+                  <span
+                    key={h.id}
+                    className="inline-flex items-center gap-1 rounded-lg bg-muted py-0.5 ps-2 text-xs"
+                  >
+                    {h.name} ({h.capacity})
+                    <DeleteButton
+                      small
+                      name={`${c.name} — ${h.name}`}
+                      onDelete={() => deleteHall({ data: h.id })}
+                      refresh={() => queryClient.invalidateQueries()}
+                    />
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">{v.noHall}</p>
+            )}
           </div>
         ))}
       </div>
+
+      {(cities.data ?? []).length > 0 && (
+        <div className="rounded-xl border border-border bg-card p-3">
+          <p className="text-sm font-medium">{v.cities}</p>
+          <div className="mt-1 flex flex-wrap gap-1">
+            {(cities.data ?? []).map((c) => (
+              <span
+                key={c.id}
+                className="inline-flex items-center gap-1 rounded-lg bg-muted py-0.5 ps-2 text-xs"
+              >
+                {cityName(c)}
+                <DeleteButton
+                  small
+                  name={cityName(c)}
+                  confirm={v.confirmDeleteCity(cityName(c))}
+                  onDelete={() => deleteCity({ data: c.id })}
+                  refresh={() => queryClient.invalidateQueries()}
+                />
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

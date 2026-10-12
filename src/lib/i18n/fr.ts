@@ -220,6 +220,11 @@ export const fr = {
     HALL_EXISTS: "Une salle porte déjà ce nom dans ce cinéma",
     CINEMA_REQUIRED: "Choisissez le cinéma de rattachement",
     HAS_BOOKINGS: "Des billets ont été vendus pour cette séance",
+    HAS_SOLD_TICKETS:
+      "Des billets ont été vendus pour ses séances : la fiche est conservée pour l'historique",
+    CITY_HAS_CINEMAS: "Supprimez d'abord les cinémas de cette ville",
+    CINEMA_NOT_FOUND: "Cinéma introuvable",
+    CITY_NOT_FOUND: "Ville introuvable",
     IMAGE_TOO_LARGE: "Image trop lourde (3 Mo maximum)",
     IMAGE_EMPTY: "Image vide",
     IMAGE_FORMAT: "Format non pris en charge (JPEG, PNG ou WebP)",
@@ -387,6 +392,11 @@ export const fr = {
       added: (n: number) => `${n} séances ajoutées`,
     },
     venues: {
+      confirmDelete: (name: string) =>
+        `Supprimer « ${name} » ? Ses séances sans billet vendu seront supprimées aussi. Action définitive.`,
+      confirmDeleteCity: (name: string) => `Supprimer la ville « ${name} » ?`,
+      deleted: "Supprimé",
+      cities: "Villes",
       newCity: "Nouvelle ville",
       cityHint: "Annaba",
       cityAdded: "Ville ajoutée",

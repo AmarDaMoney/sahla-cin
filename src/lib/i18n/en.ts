@@ -213,6 +213,10 @@ export const en: Dict = {
     HALL_EXISTS: "A screen with this name already exists in this cinema",
     CINEMA_REQUIRED: "Choose the cinema they belong to",
     HAS_BOOKINGS: "Tickets have been sold for this showing",
+    HAS_SOLD_TICKETS: "Tickets have been sold for its showings: it is kept for the records",
+    CITY_HAS_CINEMAS: "Delete this city's cinemas first",
+    CINEMA_NOT_FOUND: "Cinema not found",
+    CITY_NOT_FOUND: "City not found",
     IMAGE_TOO_LARGE: "Image too large (3 MB maximum)",
     IMAGE_EMPTY: "Empty image",
     IMAGE_FORMAT: "Unsupported format (JPEG, PNG or WebP)",
@@ -398,6 +402,11 @@ export const en: Dict = {
       added: (n: number) => `${n} showings added`,
     },
     venues: {
+      confirmDelete: (name: string) =>
+        `Delete “${name}”? Its showings with no tickets sold are deleted too. This cannot be undone.`,
+      confirmDeleteCity: (name: string) => `Delete the city “${name}”?`,
+      deleted: "Deleted",
+      cities: "Cities",
       newCity: "New city",
       cityHint: "Annaba",
       cityAdded: "City added",

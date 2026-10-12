@@ -1,11 +1,13 @@
 // Administration : catalogue de films, lieux, salles, équipes et rôles.
-import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
-import type { Db } from "../db/client";
+import { and, asc, eq, inArray, ne, sql, type SQL } from "drizzle-orm";
+import type { Db, Tx } from "../db/client";
 import {
+  bookings,
   cinema_staff,
   cinemas,
   cities,
   halls,
+  media,
   movies,
   screenings,
   seats,
@@ -116,6 +118,98 @@ export async function createHall(
     }
     throw e;
   }
+}
+
+/* ------------------------------------------------------------ Suppressions */
+
+// Une fiche (film, salle, cinéma) ne peut être supprimée que si aucun billet
+// n'a été vendu pour ses séances : les ventes restent dans l'historique. Ses
+// séances sans billet (et les réservations annulées) partent avec elle.
+async function deleteScreeningsWhere(tx: Tx, where: SQL) {
+  const ids = (await tx.select({ id: screenings.id }).from(screenings).where(where)).map(
+    (s) => s.id,
+  );
+  if (!ids.length) return;
+  // Verrouille les séances : aucune réservation ne peut arriver pendant la suppression.
+  await tx
+    .select({ id: screenings.id })
+    .from(screenings)
+    .where(inArray(screenings.id, ids))
+    .for("update");
+  const [sold] = await tx
+    .select({ id: bookings.id })
+    .from(bookings)
+    .where(and(inArray(bookings.screening_id, ids), ne(bookings.status, "annule")))
+    .limit(1);
+  if (sold) {
+    throw new AppError(
+      "HAS_SOLD_TICKETS",
+      "Des billets ont été vendus pour ses séances : la fiche est conservée pour l'historique",
+    );
+  }
+  await tx.delete(bookings).where(inArray(bookings.screening_id, ids));
+  await tx.delete(screenings).where(inArray(screenings.id, ids));
+}
+
+// Supprime l'affiche stockée chez nous si plus aucun film ne l'utilise.
+async function dropUnusedPoster(tx: Tx, url: string | null) {
+  const id = url?.match(/^\/api\/media\/([0-9a-f-]{36})$/)?.[1];
+  if (!id) return;
+  const [used] = await tx
+    .select({ id: movies.id })
+    .from(movies)
+    .where(eq(movies.poster_url, url!))
+    .limit(1);
+  if (!used) await tx.delete(media).where(eq(media.id, id));
+}
+
+export async function deleteMovie(db: Db, id: string) {
+  await db.transaction(async (tx) => {
+    const [movie] = await tx
+      .select({ poster_url: movies.poster_url })
+      .from(movies)
+      .where(eq(movies.id, id));
+    if (!movie) throw new AppError("MOVIE_NOT_FOUND", "Film introuvable");
+    await deleteScreeningsWhere(tx, eq(screenings.movie_id, id));
+    await tx.delete(movies).where(eq(movies.id, id));
+    await dropUnusedPoster(tx, movie.poster_url);
+  });
+}
+
+export async function deleteHall(db: Db, id: string) {
+  await db.transaction(async (tx) => {
+    const [hall] = await tx.select({ id: halls.id }).from(halls).where(eq(halls.id, id));
+    if (!hall) throw new AppError("HALL_NOT_FOUND", "Salle introuvable");
+    await deleteScreeningsWhere(tx, eq(screenings.hall_id, id));
+    await tx.delete(halls).where(eq(halls.id, id)); // sièges supprimés en cascade
+  });
+}
+
+export async function deleteCinema(db: Db, id: string) {
+  await db.transaction(async (tx) => {
+    const [cinema] = await tx.select({ id: cinemas.id }).from(cinemas).where(eq(cinemas.id, id));
+    if (!cinema) throw new AppError("CINEMA_NOT_FOUND", "Cinéma introuvable");
+    const hallIds = tx.select({ id: halls.id }).from(halls).where(eq(halls.cinema_id, id));
+    await deleteScreeningsWhere(tx, inArray(screenings.hall_id, hallIds));
+    await tx.delete(halls).where(eq(halls.cinema_id, id));
+    await tx.delete(cinemas).where(eq(cinemas.id, id)); // équipe détachée en cascade
+  });
+}
+
+export async function deleteCity(db: Db, id: string) {
+  await db.transaction(async (tx) => {
+    const [city] = await tx.select({ id: cities.id }).from(cities).where(eq(cities.id, id));
+    if (!city) throw new AppError("CITY_NOT_FOUND", "Ville introuvable");
+    const [cinema] = await tx
+      .select({ id: cinemas.id })
+      .from(cinemas)
+      .where(eq(cinemas.city_id, id))
+      .limit(1);
+    if (cinema) {
+      throw new AppError("CITY_HAS_CINEMAS", "Supprimez d'abord les cinémas de cette ville");
+    }
+    await tx.delete(cities).where(eq(cities.id, id));
+  });
 }
 
 async function userIdByEmail(db: Db, email: string) {

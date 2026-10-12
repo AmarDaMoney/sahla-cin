@@ -228,6 +228,10 @@ export const ar: Dict = {
     HALL_EXISTS: "توجد قاعة بهذا الاسم في هذه السينما",
     CINEMA_REQUIRED: "اختر السينما التابع لها",
     HAS_BOOKINGS: "تم بيع تذاكر لهذا العرض",
+    HAS_SOLD_TICKETS: "بيعت تذاكر لعروضه: يُحتفظ به في السجل",
+    CITY_HAS_CINEMAS: "احذف دور السينما في هذه المدينة أولاً",
+    CINEMA_NOT_FOUND: "دار السينما غير موجودة",
+    CITY_NOT_FOUND: "المدينة غير موجودة",
     IMAGE_TOO_LARGE: "الصورة ثقيلة جداً (3 ميغابايت كحد أقصى)",
     IMAGE_EMPTY: "الصورة فارغة",
     IMAGE_FORMAT: "صيغة غير مدعومة (JPEG أو PNG أو WebP)",
@@ -424,6 +428,11 @@ export const ar: Dict = {
       added: (n: number) => `أُضيف ${n} عرضاً`,
     },
     venues: {
+      confirmDelete: (name: string) =>
+        `حذف «${name}»؟ ستُحذف أيضاً عروضه التي لم تُبع لها تذاكر. لا يمكن التراجع.`,
+      confirmDeleteCity: (name: string) => `حذف مدينة «${name}»؟`,
+      deleted: "تم الحذف",
+      cities: "المدن",
       newCity: "مدينة جديدة",
       cityHint: "Annaba",
       cityAdded: "تمت إضافة المدينة",
