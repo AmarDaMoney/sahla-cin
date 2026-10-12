@@ -191,6 +191,8 @@ const MOVIES = [
     title: "Insidious : L'Invasion du lointain",
     title_ar: "إنسيديوس: الغزو البعيد",
     title_en: "Insidious: The Further Invasion",
+    original_title: "Insidious: The Further",
+    original_language: "en",
     synopsis_ar:
       "تواجه عائلة لامبرت اقتحاماً جديداً قادماً من «البعيد»، عالم روحي لا يعود منه أحد سالماً.",
     synopsis_en:
@@ -206,6 +208,8 @@ const MOVIES = [
     title: "Spider-Man : Brand New Day",
     title_ar: "الرجل العنكبوت: يوم جديد",
     title_en: "Spider-Man: Brand New Day",
+    original_title: "Spider-Man: Brand New Day",
+    original_language: "en",
     synopsis_ar: "يبدأ بيتر باركر من جديد في نيويورك نسيت اسمه، بين تهديدات جديدة وجراح قديمة.",
     synopsis_en:
       "Peter Parker starts over in a New York that has forgotten his name, facing new threats and old wounds.",
@@ -220,6 +224,8 @@ const MOVIES = [
     title: "Marius et le royaume des mers",
     title_ar: "ماريوس ومملكة البحار",
     title_en: "Marius and the Kingdom of the Sea",
+    original_title: "Marius et le royaume des mers",
+    original_language: "fr",
     synopsis_ar: "يكتشف صياد شاب مملكة تحت البحر مهددة، ويصبح رغماً عنه أملها الأخير.",
     synopsis_en:
       "A young fisherman discovers an endangered undersea kingdom and becomes, despite himself, its last hope.",
@@ -234,6 +240,8 @@ const MOVIES = [
     title: "Pat' Patrouille : Mission Dino",
     title_ar: "دورية المخالب: مهمة الديناصور",
     title_en: "PAW Patrol: Dino Mission",
+    original_title: "PAW Patrol: Dino Mission",
+    original_language: "en",
     synopsis_ar: "تنطلق دورية المخالب في أثر ديناصورات هاربة من وادٍ منسي.",
     synopsis_en: "The PAW Patrol tracks dinosaurs that escaped from a forgotten valley.",
     duration_minutes: 88,
@@ -246,6 +254,8 @@ const MOVIES = [
     title: "La Fin d'Oak Street",
     title_ar: "نهاية شارع أوك",
     title_en: "The End of Oak Street",
+    original_title: "The End of Oak Street",
+    original_language: "en",
     synopsis_ar: "يكافح آخر سكان شارع مهدد بالهدم للحفاظ على حيّهم حياً.",
     synopsis_en:
       "The last residents of a street slated for demolition fight to keep their neighbourhood alive.",
@@ -260,6 +270,8 @@ const MOVIES = [
     title: "Vaiana (live action)",
     title_ar: "فايانا",
     title_en: "Moana (live action)",
+    original_title: "Moana",
+    original_language: "en",
     synopsis_ar: "النسخة الحية من رحلة فايانا عبر المحيط الهادئ.",
     synopsis_en: "The live-action adaptation of Moana's voyage across the Pacific.",
     duration_minutes: 124,
@@ -272,6 +284,8 @@ const MOVIES = [
     title: "Toy Story 5",
     title_ar: "حكاية لعبة 5",
     title_en: "Toy Story 5",
+    original_title: "Toy Story 5",
+    original_language: "en",
     synopsis_ar: "وودي وباز ورفاقهما في مواجهة جيل جديد من الألعاب المتصلة.",
     synopsis_en: "Woody, Buzz and the gang face a new generation of connected toys.",
     duration_minutes: 100,
@@ -284,6 +298,8 @@ const MOVIES = [
     title: "Backrooms",
     title_ar: "الغرف الخلفية",
     title_en: "Backrooms",
+    original_title: "Backrooms",
+    original_language: "en",
     synopsis_ar: "مراهقون عالقون في متاهة ممرات لا نهاية لها يبحثون عن مخرج قد لا يكون موجوداً.",
     synopsis_en:
       "Trapped in an endless maze of corridors, teenagers search for an exit that may not exist.",
@@ -298,6 +314,8 @@ const MOVIES = [
     title: "Minions & Monsters",
     title_ar: "المينيونز والوحوش",
     title_en: "Minions & Monsters",
+    original_title: "Minions & Monsters",
+    original_language: "en",
     synopsis_ar: "يتحالف المينيونز مع وحوش خرقاء لإنقاذ مدينتهم من عالم شديد الطموح.",
     synopsis_en:
       "The Minions team up with clumsy monsters to save their town from an overambitious scientist.",
@@ -312,6 +330,8 @@ const MOVIES = [
     title: "Michael Jackson",
     title_ar: "مايكل جاكسون",
     title_en: "Michael Jackson",
+    original_title: "Michael",
+    original_language: "en",
     synopsis_ar: "مسيرة ملك البوب، من طفولته في غاري إلى أكبر مسارح العالم.",
     synopsis_en:
       "The journey of the King of Pop, from his childhood in Gary to the world's biggest stages.",
@@ -326,6 +346,8 @@ const MOVIES = [
     title: "Poupiya",
     title_ar: "بوبية",
     title_en: "Poupiya",
+    original_title: "بوبية",
+    original_language: "ar",
     synopsis_ar: "كوميديا عائلية جزائرية مليئة بسوء التفاهم حول عرس يخرج عن السيطرة.",
     synopsis_en:
       "An Algerian family comedy full of mix-ups around a wedding that goes off the rails.",
@@ -379,6 +401,8 @@ export async function seedDemo(db: Db, now = new Date()) {
           title_en: sql`coalesce(${movies.title_en}, excluded.title_en)`,
           synopsis_ar: sql`coalesce(${movies.synopsis_ar}, excluded.synopsis_ar)`,
           synopsis_en: sql`coalesce(${movies.synopsis_en}, excluded.synopsis_en)`,
+          original_title: sql`coalesce(${movies.original_title}, excluded.original_title)`,
+          original_language: sql`coalesce(${movies.original_language}, excluded.original_language)`,
         },
       });
 

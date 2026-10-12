@@ -98,3 +98,43 @@ describe("dates", () => {
     expect(formatDate("ar", show, "time")).toBe("17:00");
   });
 });
+
+describe("original title under the title", () => {
+  it("follows the display rule for each language", async () => {
+    const { originalSubtitle } = await import("@/lib/i18n");
+    const spiderman = {
+      title: "Spider-Man : Brand New Day",
+      title_ar: "الرجل العنكبوت: يوم جديد",
+      title_en: "Spider-Man: Brand New Day",
+      original_title: "Spider-Man: Brand New Day",
+      original_language: "en",
+    };
+    const poupiya = {
+      title: "Poupiya",
+      title_ar: "بوبية",
+      title_en: "Poupiya",
+      original_title: "بوبية",
+      original_language: "ar",
+    };
+    const marius = {
+      title: "Marius et le royaume des mers",
+      title_ar: "ماريوس ومملكة البحار",
+      title_en: "Marius and the Kingdom of the Sea",
+      original_title: "Marius et le royaume des mers",
+      original_language: "fr",
+    };
+    // Anglais : pas de second titre pour un film anglophone…
+    expect(originalSubtitle(spiderman, "en")).toBeNull();
+    // …mais le titre original d'un film arabe ou français.
+    expect(originalSubtitle(poupiya, "en")).toBe("بوبية");
+    expect(originalSubtitle(marius, "en")).toBe("Marius et le royaume des mers");
+    // Français / arabe : titre original dès qu'il diffère (ponctuation ignorée).
+    expect(originalSubtitle(spiderman, "fr")).toBeNull();
+    expect(originalSubtitle(spiderman, "ar")).toBe("Spider-Man: Brand New Day");
+    expect(originalSubtitle(poupiya, "fr")).toBe("بوبية");
+    expect(originalSubtitle(poupiya, "ar")).toBeNull();
+    expect(originalSubtitle(marius, "fr")).toBeNull();
+    // Titre original inconnu : rien.
+    expect(originalSubtitle({ title: "X", original_title: null }, "fr")).toBeNull();
+  });
+});

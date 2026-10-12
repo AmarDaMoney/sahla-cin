@@ -155,6 +155,8 @@ export const fr = {
     about: "À propos",
     aboutText:
       "BookCinéDZ centralise le programme des salles de cinéma algériennes et la réservation de billets. Les programmes sont saisis par les cinémas partenaires puis validés par notre équipe avant publication.",
+    tmdbNotice:
+      "Fiches films : ce produit utilise l'API TMDB mais n'est ni approuvé ni certifié par TMDB.",
     legal: "Mentions légales",
     legalText:
       "Les billets réservés sont nominatifs et valables uniquement pour la séance indiquée. Un billet déjà scanné ne peut plus être réutilisé. Les données personnelles sont utilisées uniquement pour la gestion des réservations.",
@@ -186,6 +188,8 @@ export const fr = {
     resetDone: "Mot de passe modifié. Vous pouvez vous connecter.",
     resetInvalid: "Lien invalide ou expiré. Refaites une demande.",
     passwordHint: "8 caractères minimum",
+    showPassword: "Afficher le mot de passe",
+    hidePassword: "Masquer le mot de passe",
   },
   authErrors: {
     INVALID_EMAIL_OR_PASSWORD: "E-mail ou mot de passe incorrect.",
@@ -233,6 +237,14 @@ export const fr = {
     PAYMENT_UNAVAILABLE:
       "Le paiement en ligne n'est pas encore disponible. Choisissez « Paiement au guichet ».",
     PAYMENT_REFUSED: "Paiement refusé : la réservation a expiré",
+    TMDB_NOT_CONFIGURED: "Import TMDB non configuré (TMDB_API_KEY)",
+    TMDB_BAD_KEY: "Clé TMDB refusée : vérifiez TMDB_API_KEY",
+    TMDB_UNAVAILABLE: "TMDB est indisponible, réessayez plus tard",
+    OVERLAP: "Une autre séance occupe déjà la salle à cet horaire",
+    INVALID_PRICE: "Prix invalide",
+    INVALID_VERSION: "Version inconnue (VF, VO, VOSTFR, VOSTAR, AR_DUB)",
+    CSV_COLUMNS: "Ligne incomplète : 6 colonnes attendues",
+    TOO_MANY_SCREENINGS: "300 séances maximum à la fois",
     AUTH_NOT_CONFIGURED: "Connexion indisponible : configuration incomplète",
   } as Record<string, string>,
   roles: {
@@ -241,6 +253,18 @@ export const fr = {
     admin: "Administrateur",
     agent_guichet: "Agent guichet",
   },
+  langNames: {
+    fr: "Français",
+    ar: "Arabe",
+    en: "Anglais",
+    es: "Espagnol",
+    it: "Italien",
+    de: "Allemand",
+    tr: "Turc",
+    hi: "Hindi",
+    ja: "Japonais",
+    ko: "Coréen",
+  } as Record<string, string>,
   status: { brouillon: "Brouillon", en_revue: "En revue", publie: "Publié" },
   languages: {
     VO: "VO",
@@ -268,6 +292,38 @@ export const fr = {
     incomplete: "Complétez la salle, le film et l'horaire.",
     noCinema: "Aucun cinéma ne vous est assigné.",
     empty: "Aucune séance pour l'instant.",
+    tools: {
+      single: "Séances",
+      copy: "Copier une semaine",
+      csv: "Tableur",
+      from: "Du",
+      to: "Au",
+      days: "Jours",
+      weekdays: ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"],
+      times: "Horaires",
+      addTime: "Ajouter l'horaire",
+      timesHint: "Ajoutez un ou plusieurs horaires (ex. 14:00, 17:30, 20:30).",
+      willCreate: (n: number) => `${n} séance${n > 1 ? "s" : ""} seront créées en brouillon`,
+      create: "Créer les séances",
+      created: (n: number) =>
+        `${n} séance${n > 1 ? "s" : ""} ajoutée${n > 1 ? "s" : ""} en brouillon`,
+      lineError: (line: number, message: string) => `Séance n° ${line} : ${message}`,
+      copyHint:
+        "Recopie les 7 jours à partir de la date choisie sur les 7 jours suivants (en brouillon). Les séances en conflit sont ignorées.",
+      copyFrom: "Semaine commençant le",
+      copyButton: "Copier sur la semaine suivante",
+      copied: (created: number, skipped: number) =>
+        `${created} séance${created > 1 ? "s" : ""} copiée${created > 1 ? "s" : ""}${skipped ? `, ${skipped} ignorée${skipped > 1 ? "s" : ""} (conflit)` : ""}`,
+      csvHint:
+        "Colonnes : date ; heure ; salle ; film ; version ; prix. Exportez depuis Excel en « CSV (point-virgule) ». Le film peut être écrit en français, en arabe, en anglais ou dans sa langue d'origine.",
+      template: "Télécharger un modèle",
+      chooseFile: "Choisir un fichier",
+      check: "Vérifier",
+      confirm: (n: number) => `Importer ${n} séance${n > 1 ? "s" : ""}`,
+      csvLine: (line: number, message: string) => `Ligne ${line} : ${message}`,
+      csvReady: (n: number) => `${n} séance${n > 1 ? "s" : ""} prête${n > 1 ? "s" : ""} à importer`,
+      upcoming: "Séances à venir",
+    },
   },
   admin: {
     title: "Espace admin",
@@ -282,6 +338,9 @@ export const fr = {
       title: "Titre (français)",
       titleAr: "Titre (arabe)",
       titleEn: "Titre (anglais)",
+      originalTitle: "Titre original",
+      originalLanguage: "Langue originale",
+      otherLanguage: "Autre / inconnue",
       duration: "Durée (min)",
       genres: "Genres",
       genresHint: "Drame, Comédie",
@@ -299,6 +358,18 @@ export const fr = {
       added: "Film ajouté",
       saved: "Film modifié",
       uploaded: "Affiche envoyée",
+    },
+    tmdb: {
+      title: "Importer depuis TMDB",
+      hint: "Tapez un titre : titres et synopsis (français, arabe, anglais), affiche, durée, genres, classification et bande-annonce sont remplis automatiquement. Vérifiez puis enregistrez.",
+      placeholder: "Titre du film",
+      search: "Rechercher",
+      import: "Importer",
+      edit: "Déjà importé — modifier",
+      imported: "Film importé : vérifiez la fiche ci-dessous",
+      noResults: "Aucun résultat",
+      notConfigured:
+        "Pour activer l'import, ajoutez la variable TMDB_API_KEY sur Railway (clé gratuite sur themoviedb.org).",
     },
     demo: {
       title: "Données de démonstration",

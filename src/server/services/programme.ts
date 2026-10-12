@@ -1,8 +1,8 @@
 // Programme des cinémas : les contributeurs saisissent des séances en
 // brouillon et les soumettent ; un administrateur les publie.
-import { and, asc, eq, inArray, ne } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lt, lte, ne } from "drizzle-orm";
 import type { Db } from "../db/client";
-import { bookings, cinema_staff, cinemas, halls, screenings } from "../db/schema";
+import { bookings, cinema_staff, cinemas, halls, movies, screenings } from "../db/schema";
 import { AppError } from "@/lib/errors";
 import { hasRole, isAdmin, type Viewer } from "../viewer";
 
@@ -29,7 +29,7 @@ async function managedCinemaIds(db: Db, viewer: Viewer): Promise<string[] | "all
   return rows.map((r) => r.cinema_id);
 }
 
-async function assertManagesCinema(db: Db, viewer: Viewer, cinemaId: string) {
+export async function assertManagesCinema(db: Db, viewer: Viewer, cinemaId: string) {
   const ids = await managedCinemaIds(db, viewer);
   if (ids !== "all" && !ids.includes(cinemaId)) {
     throw new AppError("NOT_YOUR_CINEMA", "Vous ne gérez pas ce cinéma");
@@ -69,6 +69,129 @@ export async function listCinemaScreenings(db: Db, viewer: Viewer, cinemaId: str
   });
 }
 
+export type NewScreening = {
+  hallId: string;
+  movieId: string;
+  startsAt: Date;
+  price: number;
+  audioLanguage: AudioLanguage;
+};
+
+export type LineError = { line: number; code: string };
+
+// Ménage entre deux séances d'une même salle.
+export const CLEANING_MINUTES = 15;
+const MAX_BATCH = 300;
+
+const overlaps = (aStart: number, aEnd: number, bStart: number, bEnd: number) =>
+  aStart < bEnd && bStart < aEnd;
+
+// Vérifie puis crée des séances en brouillon, tout ou rien. Renvoie les
+// erreurs par ligne (numérotées à partir de 1) au lieu de créer quoi que ce soit.
+export async function createScreenings(
+  db: Db,
+  viewer: Viewer,
+  items: NewScreening[],
+  now = new Date(),
+  opts: { dryRun?: boolean } = {},
+): Promise<{ created: number; ids: string[]; errors: LineError[] }> {
+  if (!items.length) return { created: 0, ids: [], errors: [] };
+  if (items.length > MAX_BATCH) {
+    throw new AppError("TOO_MANY_SCREENINGS", `${MAX_BATCH} séances maximum à la fois`);
+  }
+
+  return db.transaction(async (tx) => {
+    const hallIds = [...new Set(items.map((i) => i.hallId))];
+    // Verrouille les salles : deux saisies simultanées ne peuvent pas se chevaucher.
+    const hallRows = await tx
+      .select({ id: halls.id, cinema_id: halls.cinema_id })
+      .from(halls)
+      .where(inArray(halls.id, hallIds))
+      .for("update");
+    const managed = await managedCinemaIds(tx as unknown as Db, viewer);
+    const movieRows = await tx
+      .select({ id: movies.id, duration: movies.duration_minutes })
+      .from(movies)
+      .where(inArray(movies.id, [...new Set(items.map((i) => i.movieId))]));
+    const duration = new Map(movieRows.map((m) => [m.id, m.duration]));
+
+    const times = items.map((i) => i.startsAt.getTime());
+    const existing = await tx
+      .select({
+        hall_id: screenings.hall_id,
+        starts_at: screenings.starts_at,
+        duration: movies.duration_minutes,
+      })
+      .from(screenings)
+      .innerJoin(movies, eq(movies.id, screenings.movie_id))
+      .where(
+        and(
+          inArray(screenings.hall_id, hallIds),
+          gte(screenings.starts_at, new Date(Math.min(...times) - DAY)),
+          lte(screenings.starts_at, new Date(Math.max(...times) + DAY)),
+        ),
+      );
+    const busy = existing.map((e) => ({
+      hall: e.hall_id,
+      start: e.starts_at.getTime(),
+      end: e.starts_at.getTime() + (e.duration + CLEANING_MINUTES) * 60_000,
+    }));
+
+    const errors: LineError[] = [];
+    items.forEach((item, index) => {
+      const line = index + 1;
+      const hall = hallRows.find((h) => h.id === item.hallId);
+      if (!hall) return errors.push({ line, code: "HALL_NOT_FOUND" });
+      if (managed !== "all" && !managed.includes(hall.cinema_id)) {
+        return errors.push({ line, code: "NOT_YOUR_CINEMA" });
+      }
+      const minutes = duration.get(item.movieId);
+      if (minutes === undefined) return errors.push({ line, code: "MOVIE_NOT_FOUND" });
+      if (Number.isNaN(item.startsAt.getTime())) return errors.push({ line, code: "INVALID_DATE" });
+      if (item.startsAt <= now) return errors.push({ line, code: "PAST_DATE" });
+      if (!Number.isInteger(item.price) || item.price < 0 || item.price > 100_000) {
+        return errors.push({ line, code: "INVALID_PRICE" });
+      }
+      const start = item.startsAt.getTime();
+      const end = start + (minutes + CLEANING_MINUTES) * 60_000;
+      if (busy.some((b) => b.hall === item.hallId && overlaps(start, end, b.start, b.end))) {
+        return errors.push({ line, code: "OVERLAP" });
+      }
+      // Les séances de ce lot comptent aussi pour les lignes suivantes.
+      busy.push({ hall: item.hallId, start, end });
+      return undefined;
+    });
+    if (errors.length) return { created: 0, ids: [], errors };
+    if (opts.dryRun) return { created: items.length, ids: [], errors: [] };
+
+    const rows = await tx
+      .insert(screenings)
+      .values(
+        items.map((i) => ({
+          hall_id: i.hallId,
+          movie_id: i.movieId,
+          starts_at: i.startsAt,
+          price: i.price,
+          audio_language: i.audioLanguage,
+          status: "brouillon" as const,
+          created_by: viewer.id,
+        })),
+      )
+      .returning({ id: screenings.id });
+    return { created: rows.length, ids: rows.map((r) => r.id), errors: [] };
+  });
+}
+
+const ERROR_MESSAGES: Record<string, string> = {
+  HALL_NOT_FOUND: "Salle introuvable",
+  NOT_YOUR_CINEMA: "Vous ne gérez pas ce cinéma",
+  MOVIE_NOT_FOUND: "Film introuvable",
+  INVALID_DATE: "Date et heure invalides",
+  PAST_DATE: "La séance doit être dans le futur",
+  INVALID_PRICE: "Prix invalide",
+  OVERLAP: "Une autre séance occupe déjà la salle à cet horaire",
+};
+
 export async function createScreening(
   db: Db,
   viewer: Viewer,
@@ -81,25 +204,98 @@ export async function createScreening(
   },
   now = new Date(),
 ) {
-  await assertManagesCinema(db, viewer, await cinemaOfHall(db, input.hallId));
-  const startsAt = parseAlgiersLocal(input.startsAtLocal);
-  if (startsAt <= now) throw new AppError("PAST_DATE", "La séance doit être dans le futur");
-  const movie = await db.query.movies.findFirst({ where: (m, { eq }) => eq(m.id, input.movieId) });
-  if (!movie) throw new AppError("MOVIE_NOT_FOUND", "Film introuvable");
+  const { errors, ids } = await createScreenings(
+    db,
+    viewer,
+    [{ ...input, startsAt: parseAlgiersLocal(input.startsAtLocal) }],
+    now,
+  );
+  const code = errors[0]?.code;
+  if (code) throw new AppError(code, ERROR_MESSAGES[code] ?? code);
+  return { id: ids[0]! };
+}
 
-  const [row] = await db
-    .insert(screenings)
-    .values({
-      hall_id: input.hallId,
-      movie_id: input.movieId,
-      starts_at: startsAt,
+// Une séance pour chaque jour × chaque horaire (heure d'Alger).
+export async function createScreeningBatch(
+  db: Db,
+  viewer: Viewer,
+  input: {
+    hallId: string;
+    movieId: string;
+    price: number;
+    audioLanguage: AudioLanguage;
+    dates: string[]; // AAAA-MM-JJ
+    times: string[]; // HH:MM
+  },
+  now = new Date(),
+) {
+  const items = input.dates.flatMap((date) =>
+    [...input.times].sort().map((time) => ({
+      hallId: input.hallId,
+      movieId: input.movieId,
       price: input.price,
-      audio_language: input.audioLanguage,
-      status: "brouillon",
-      created_by: viewer.id,
+      audioLanguage: input.audioLanguage,
+      startsAt: parseAlgiersLocal(`${date}T${time}`),
+    })),
+  );
+  return createScreenings(db, viewer, items, now);
+}
+
+const DAY = 24 * 60 * 60_000;
+
+// Recopie les séances de 7 jours (à partir de fromDate, heure d'Alger) sur les
+// 7 jours suivants, en brouillon. Les séances qui chevaucheraient une séance
+// existante sont ignorées et comptées.
+export async function copyWeek(
+  db: Db,
+  viewer: Viewer,
+  input: { cinemaId: string; fromDate: string },
+  now = new Date(),
+) {
+  await assertManagesCinema(db, viewer, input.cinemaId);
+  const from = parseAlgiersLocal(`${input.fromDate}T00:00`);
+  const to = new Date(from.getTime() + 7 * DAY);
+  const source = await db
+    .select({
+      hall_id: screenings.hall_id,
+      movie_id: screenings.movie_id,
+      starts_at: screenings.starts_at,
+      price: screenings.price,
+      audio_language: screenings.audio_language,
     })
-    .returning({ id: screenings.id });
-  return row!;
+    .from(screenings)
+    .innerJoin(halls, eq(halls.id, screenings.hall_id))
+    .where(
+      and(
+        eq(halls.cinema_id, input.cinemaId),
+        gte(screenings.starts_at, from),
+        lt(screenings.starts_at, to),
+      ),
+    )
+    .orderBy(asc(screenings.starts_at));
+
+  let created = 0;
+  let skipped = 0;
+  // Une par une : une séance en conflit est ignorée sans bloquer les autres.
+  for (const s of source) {
+    const { errors } = await createScreenings(
+      db,
+      viewer,
+      [
+        {
+          hallId: s.hall_id,
+          movieId: s.movie_id,
+          startsAt: new Date(s.starts_at.getTime() + 7 * DAY),
+          price: s.price,
+          audioLanguage: s.audio_language,
+        },
+      ],
+      now,
+    );
+    if (errors.length) skipped++;
+    else created++;
+  }
+  return { created, skipped };
 }
 
 // Contributeur : brouillon → en revue. Administrateur : tout changement.

@@ -59,14 +59,33 @@ language the person was using.
 
 - **Lieux**: add cities, cinemas (paste GPS coordinates from Google Maps) and
   screens; the seat map (rows of 10) is created automatically.
-- **Films**: add or edit films, with titles and synopses in French, Arabic
-  and English. **Upload the poster** directly (it is resized in the browser and
+- **Films**: **import from TMDB** (type a title, pick the film: titles and
+  synopses in French/Arabic/English, original title and language, poster,
+  running time, genres, French rating and trailer are filled in; the poster is
+  copied into the database). Needs `TMDB_API_KEY` (free key at
+  themoviedb.org; check TMDB's terms for commercial use — attribution is shown
+  in _À propos_). Or add/edit films by hand, with titles and synopses in
+  French, Arabic and English. **Upload the poster** directly (it is resized in the browser and
   stored in the database, so it is backed up with everything else), or paste
   an image URL.
 - **Équipe**: give a role to an existing account by email. Contributors (enter
   a cinema's programme) and counter agents (scan tickets) must be attached to
   their cinema; they only see and act on that cinema.
 - **Validation**: publish the showings contributors submitted.
+
+Contributors (and admins) enter showtimes in _Espace contributeur_:
+
+- **Séances**: one film, a date range, chosen weekdays and several times → all
+  the showings in one go.
+- **Copier une semaine**: duplicates 7 days onto the following week.
+- **Tableur**: import a CSV (`date;heure;salle;film;version;prix`, template
+  downloadable). Checked first, line-by-line errors, then imported all at once.
+
+A screen can never be double-booked: showings may not overlap (film length +
+15 minutes of cleaning).
+
+Titles: in French and Arabic the original title is shown under the title when
+it differs; in English only for films originally in French or Arabic.
 
 ## Payments
 

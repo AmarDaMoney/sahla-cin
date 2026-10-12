@@ -71,7 +71,11 @@ function MoviePage() {
               {movie.data ? title(movie.data) : ""}
             </h1>
             {movie.data && subtitle(movie.data) && (
-              <p dir="auto" className="mt-1 text-muted-foreground">
+              <p
+                dir="auto"
+                lang={movie.data.original_language ?? undefined}
+                className="mt-1 text-muted-foreground"
+              >
                 {subtitle(movie.data)}
               </p>
             )}

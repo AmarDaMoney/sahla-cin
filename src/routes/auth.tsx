@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { AppHeader } from "@/components/AppHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/PasswordInput";
 import { Label } from "@/components/ui/label";
 import { ME_QUERY_KEY } from "@/hooks/useAuth";
 import { fetchAuthOptions } from "@/lib/api";
@@ -142,9 +143,8 @@ function AuthPage() {
                   </button>
                 )}
               </div>
-              <Input
+              <PasswordInput
                 id="password"
-                type="password"
                 autoComplete={mode === "login" ? "current-password" : "new-password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

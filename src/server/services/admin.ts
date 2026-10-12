@@ -37,6 +37,8 @@ export type MovieInput = {
   title: string;
   title_ar: string | null;
   title_en: string | null;
+  original_title: string | null;
+  original_language: string | null;
   duration_minutes: number;
   genre: string | null;
   synopsis: string | null;

@@ -100,6 +100,7 @@ function Index() {
           normalize(s.movie.title).includes(q) ||
           normalize(s.movie.title_ar ?? "").includes(q) ||
           normalize(s.movie.title_en ?? "").includes(q) ||
+          normalize(s.movie.original_title ?? "").includes(q) ||
           normalize(s.movie.genre ?? "").includes(q) ||
           normalize(s.hall.cinema.name).includes(q),
       )
@@ -264,7 +265,11 @@ function Index() {
               <div className="min-w-0 flex-1 py-0.5">
                 <h2 className="truncate font-semibold leading-tight">{title(movie)}</h2>
                 {subtitle(movie) && (
-                  <p dir="auto" className="truncate text-sm text-muted-foreground">
+                  <p
+                    dir="auto"
+                    lang={movie.original_language ?? undefined}
+                    className="truncate text-sm text-muted-foreground"
+                  >
                     {subtitle(movie)}
                   </p>
                 )}

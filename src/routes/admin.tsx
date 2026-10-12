@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { CheckCheck, ImageUp, Plus, Trash2, X } from "lucide-react";
+import { CheckCheck, ImageUp, Plus, Search, Trash2, X } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { BottomNav } from "@/components/BottomNav";
 import { MoviePoster } from "@/components/MoviePoster";
@@ -30,8 +30,11 @@ import {
   fetchCities,
   fetchMovies,
   fetchScreeningsByStatus,
+  fetchAdminOptions,
   fetchTeam,
+  importTmdb,
   loadDemoData,
+  searchTmdb,
   removeStaff,
   revokeRole,
   setScreeningStatus,
@@ -212,6 +215,8 @@ const emptyMovie = {
   title: "",
   title_ar: "",
   title_en: "",
+  original_title: "",
+  original_language: "",
   duration_minutes: "120",
   genre: "",
   synopsis: "",
@@ -307,6 +312,110 @@ function PosterField({
   );
 }
 
+function TmdbImport({ onImported }: { onImported: (movieId: string) => void }) {
+  const { t, error } = useI18n();
+  const m = t.admin.tmdb;
+  const options = useQuery({ queryKey: ["admin-options"], queryFn: () => fetchAdminOptions() });
+  const [query, setQuery] = useState("");
+  const [busy, setBusy] = useState<number | "search" | null>(null);
+  const [results, setResults] = useState<Awaited<ReturnType<typeof searchTmdb>> | null>(null);
+
+  async function search(e: React.FormEvent) {
+    e.preventDefault();
+    if (!query.trim()) return;
+    setBusy("search");
+    try {
+      setResults(await searchTmdb({ data: query }));
+    } catch (err) {
+      toast.error(error(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function pick(tmdbId: number, movieId: string | null) {
+    if (movieId) return onImported(movieId);
+    setBusy(tmdbId);
+    try {
+      const res = await importTmdb({ data: tmdbId });
+      toast.success(m.imported);
+      setResults(null);
+      setQuery("");
+      onImported(res.movieId);
+    } catch (err) {
+      toast.error(error(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border border-dashed border-primary/40 bg-card p-4">
+      <SectionTitle>{m.title}</SectionTitle>
+      {options.data && !options.data.tmdb ? (
+        <p className="mt-1 text-xs text-muted-foreground">{m.notConfigured}</p>
+      ) : (
+        <>
+          <p className="mt-1 text-xs text-muted-foreground">{m.hint}</p>
+          <form onSubmit={search} className="mt-3 flex gap-2">
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={m.placeholder}
+              aria-label={m.placeholder}
+              dir="auto"
+              className="rounded-xl"
+            />
+            <Button type="submit" className="rounded-xl" disabled={busy !== null}>
+              <Search className="size-4" />
+              {m.search}
+            </Button>
+          </form>
+          {results && results.length === 0 && (
+            <p className="mt-3 text-sm text-muted-foreground">{m.noResults}</p>
+          )}
+          <div className="mt-3 space-y-2">
+            {(results ?? []).map((r) => (
+              <div
+                key={r.tmdbId}
+                className="flex items-center justify-between gap-3 rounded-xl border border-border p-2"
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <MoviePoster
+                    src={r.thumbnail}
+                    alt={r.title}
+                    className="h-14 w-10 shrink-0 rounded"
+                  />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium" dir="auto">
+                      {r.title}{" "}
+                      {r.year && <span className="text-muted-foreground">({r.year})</span>}
+                    </p>
+                    {r.originalTitle !== r.title && (
+                      <p className="truncate text-xs text-muted-foreground" dir="auto">
+                        {r.originalTitle}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant={r.movieId ? "outline" : "default"}
+                  className="shrink-0 rounded-xl"
+                  disabled={busy !== null}
+                  onClick={() => void pick(r.tmdbId, r.movieId)}
+                >
+                  {busy === r.tmdbId ? t.common.loading : r.movieId ? m.edit : m.import}
+                </Button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function MoviesTab() {
   const { t, title } = useI18n();
   const run = useRun();
@@ -317,6 +426,26 @@ function MoviesTab() {
   const f = t.admin.movieForm;
   const set = (k: keyof MovieForm) => (e: { target: { value: string } }) =>
     setForm({ ...form, [k]: e.target.value });
+
+  function startEdit(m: NonNullable<typeof movies.data>[number]) {
+    setEditing(m.id);
+    setForm({
+      title: m.title,
+      title_ar: m.title_ar ?? "",
+      title_en: m.title_en ?? "",
+      original_title: m.original_title ?? "",
+      original_language: m.original_language ?? "",
+      duration_minutes: String(m.duration_minutes),
+      genre: m.genre ?? "",
+      synopsis: m.synopsis ?? "",
+      synopsis_ar: m.synopsis_ar ?? "",
+      synopsis_en: m.synopsis_en ?? "",
+      poster_url: m.poster_url ?? "",
+      trailer_url: m.trailer_url ?? "",
+      age_rating: m.age_rating ?? "",
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
   async function save() {
     if (!form.title.trim()) return;
@@ -339,8 +468,20 @@ function MoviesTab() {
     }
   }
 
+  async function onImported(movieId: string) {
+    const list = await queryClient.fetchQuery({
+      queryKey: ["movies"],
+      queryFn: () => fetchMovies(),
+      staleTime: 0,
+    });
+    const movie = list.find((m) => m.id === movieId);
+    if (movie) startEdit(movie);
+  }
+
   return (
     <div className="space-y-4">
+      <TmdbImport onImported={(id) => void onImported(id)} />
+
       <div className="rounded-2xl border border-border bg-card p-4">
         <SectionTitle>{editing ? f.edit : f.new}</SectionTitle>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -377,6 +518,38 @@ function MoviesTab() {
               onChange={set("title_en")}
               className="rounded-xl"
             />
+          </Field>
+          <Field id="original_title" label={f.originalTitle}>
+            <Input
+              id="original_title"
+              dir="auto"
+              value={form.original_title}
+              onChange={set("original_title")}
+              className="rounded-xl"
+            />
+          </Field>
+          <Field label={f.originalLanguage}>
+            <Select
+              value={form.original_language || "none"}
+              onValueChange={(x) =>
+                setForm((prev) => ({ ...prev, original_language: x === "none" ? "" : x }))
+              }
+            >
+              <SelectTrigger className="rounded-xl">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">{f.otherLanguage}</SelectItem>
+                {Object.keys({
+                  ...t.langNames,
+                  ...(form.original_language ? { [form.original_language]: "" } : {}),
+                }).map((code) => (
+                  <SelectItem key={code} value={code}>
+                    {t.langNames[code] ?? code}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </Field>
           <Field id="dur" label={f.duration}>
             <Input
@@ -483,28 +656,7 @@ function MoviesTab() {
                 </p>
               </div>
             </div>
-            <Button
-              size="sm"
-              variant="outline"
-              className="rounded-xl"
-              onClick={() => {
-                setEditing(m.id);
-                setForm({
-                  title: m.title,
-                  title_ar: m.title_ar ?? "",
-                  title_en: m.title_en ?? "",
-                  duration_minutes: String(m.duration_minutes),
-                  genre: m.genre ?? "",
-                  synopsis: m.synopsis ?? "",
-                  synopsis_ar: m.synopsis_ar ?? "",
-                  synopsis_en: m.synopsis_en ?? "",
-                  poster_url: m.poster_url ?? "",
-                  trailer_url: m.trailer_url ?? "",
-                  age_rating: m.age_rating ?? "",
-                });
-                window.scrollTo({ top: 0, behavior: "smooth" });
-              }}
-            >
+            <Button size="sm" variant="outline" className="rounded-xl" onClick={() => startEdit(m)}>
               {t.common.edit}
             </Button>
           </div>

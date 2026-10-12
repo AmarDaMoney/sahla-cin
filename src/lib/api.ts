@@ -18,8 +18,10 @@ import { serialize, type Serialized } from "@/server/serialize";
 import * as admin from "@/server/services/admin";
 import * as booking from "@/server/services/booking";
 import * as catalog from "@/server/services/catalog";
+import * as csvImport from "@/server/services/csv-import";
 import { seedDemo } from "@/server/services/demo";
 import * as media from "@/server/services/media";
+import * as tmdb from "@/server/services/tmdb";
 import { notifyBooking } from "@/server/services/notifications";
 import * as programme from "@/server/services/programme";
 import { scanTicket as scan } from "@/server/services/scan";
@@ -229,6 +231,40 @@ export const createScreening = createServerFn({ method: "POST" })
     programme.createScreening(context.db, context.viewer, data),
   );
 
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+
+// Plusieurs séances d'un coup : chaque jour × chaque horaire.
+export const createScreeningBatch = createServerFn({ method: "POST" })
+  .middleware([requireRole("contributeur", "admin")])
+  .inputValidator(
+    z.object({
+      hallId: id,
+      movieId: id,
+      price: z.number().int().min(0).max(100_000),
+      audioLanguage,
+      dates: z.array(isoDate).min(1).max(62),
+      times: z.array(hhmm).min(1).max(12),
+    }),
+  )
+  .handler(async ({ data, context }) =>
+    programme.createScreeningBatch(context.db, context.viewer, data),
+  );
+
+export const copyWeek = createServerFn({ method: "POST" })
+  .middleware([requireRole("contributeur", "admin")])
+  .inputValidator(z.object({ cinemaId: id, fromDate: isoDate }))
+  .handler(async ({ data, context }) => programme.copyWeek(context.db, context.viewer, data));
+
+export const importProgrammeCsv = createServerFn({ method: "POST" })
+  .middleware([requireRole("contributeur", "admin")])
+  .inputValidator(
+    z.object({ cinemaId: id, csv: z.string().min(1).max(200_000), dryRun: z.boolean() }),
+  )
+  .handler(async ({ data, context }) =>
+    csvImport.importProgrammeCsv(context.db, context.viewer, data),
+  );
+
 export const setScreeningStatus = createServerFn({ method: "POST" })
   .middleware([requireRole("contributeur", "admin")])
   .inputValidator(z.object({ ids: z.array(id).max(500), status: publishStatus }))
@@ -266,6 +302,13 @@ export const upsertMovie = createServerFn({ method: "POST" })
       title: z.string().trim().min(1).max(200),
       title_ar: optionalText(200),
       title_en: optionalText(200),
+      original_title: optionalText(200),
+      original_language: z
+        .string()
+        .trim()
+        .regex(/^([a-z]{2})?$/)
+        .nullable()
+        .transform((v) => v || null),
       duration_minutes: z.number().int().min(1).max(600),
       genre: optionalText(100),
       synopsis: optionalText(4000),
@@ -315,6 +358,20 @@ export const uploadPoster = createServerFn({ method: "POST" })
   // Base64 d'une image de 3 Mo maximum (redimensionnée dans le navigateur).
   .inputValidator(z.string().min(1).max(4_100_000))
   .handler(async ({ data, context }) => media.saveImage(context.db, context.viewer.id, data));
+
+export const fetchAdminOptions = createServerFn({ method: "GET" })
+  .middleware([adminOnly])
+  .handler(async () => ({ tmdb: tmdb.tmdbConfigured() }));
+
+export const searchTmdb = createServerFn({ method: "GET" })
+  .middleware([adminOnly])
+  .inputValidator(z.string().trim().min(1).max(100))
+  .handler(async ({ data, context }) => tmdb.searchTmdb(context.db, data));
+
+export const importTmdb = createServerFn({ method: "POST" })
+  .middleware([adminOnly])
+  .inputValidator(z.number().int().positive())
+  .handler(async ({ data, context }) => tmdb.importTmdb(context.db, context.viewer.id, data));
 
 export const fetchTeam = createServerFn({ method: "GET" })
   .middleware([adminOnly])

@@ -217,6 +217,11 @@ export const movies = pgTable(
     title: text("title").notNull(),
     title_ar: text("title_ar"),
     title_en: text("title_en"),
+    // Titre dans sa langue d'origine (« fr », « ar », « en »…), affiché en second.
+    original_title: text("original_title"),
+    original_language: text("original_language"),
+    // Identifiant The Movie Database (import automatique), unique.
+    tmdb_id: integer("tmdb_id").unique(),
     poster_url: text("poster_url"),
     trailer_url: text("trailer_url"),
     duration_minutes: integer("duration_minutes").notNull().default(100),

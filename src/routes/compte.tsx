@@ -124,6 +124,7 @@ function Account() {
             </AccordionTrigger>
             <AccordionContent className="text-sm text-muted-foreground">
               {t.account.aboutText}
+              <span className="mt-2 block text-xs">{t.account.tmdbNotice}</span>
             </AccordionContent>
           </AccordionItem>
           <AccordionItem value="legal" className="border-b-0">

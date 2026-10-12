@@ -67,6 +67,7 @@ export const Route = createFileRoute("/api/health")({
           rateLimit: hasClientIp(request.headers)
             ? "par visiteur (IP reçue)"
             : "PARTAGÉE — l'hébergeur n'envoie pas l'IP du visiteur (voir CLIENT_IP_HEADER)",
+          filmImport: envValue("TMDB_API_KEY") ? "TMDB activé" : "TMDB non configuré (facultatif)",
           payment: envValue("PAYMENT_MODE") === "simulation" ? "simulation" : "guichet uniquement",
         };
         return new Response(JSON.stringify(body, null, 2), {

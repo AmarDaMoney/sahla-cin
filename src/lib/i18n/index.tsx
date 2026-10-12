@@ -10,6 +10,30 @@ export type { Dict };
 
 export const DICTIONARIES: Record<Lang, Dict> = { fr, ar, en };
 
+type MovieTitles = {
+  title: string;
+  title_ar?: string | null;
+  title_en?: string | null;
+  original_title?: string | null;
+  original_language?: string | null;
+};
+
+// Compare deux titres sans tenir compte de la casse, des accents ni de la
+// ponctuation (« Spider-Man : X » = « Spider-Man: X »).
+const titleKey = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, "");
+
+export function originalSubtitle(m: MovieTitles, lang: Lang): string | null {
+  const original = m.original_title?.trim();
+  if (!original) return null;
+  if (lang === "en" && m.original_language !== "fr" && m.original_language !== "ar") return null;
+  return titleKey(original) === titleKey(localized(m, "title", lang)) ? null : original;
+}
+
 const LangContext = createContext<Lang>("fr");
 
 export function LangProvider({ lang, children }: { lang: Lang; children: ReactNode }) {
@@ -30,11 +54,11 @@ export function translate(lang: Lang) {
     t,
     dir: dirOf(lang),
     date: (value: string | Date, preset: DatePreset) => formatDate(lang, value, preset),
-    // Titre du film dans la langue choisie, et titre secondaire (l'autre écriture).
-    title: (m: { title: string; title_ar?: string | null; title_en?: string | null }) =>
-      localized(m, "title", lang),
-    subtitle: (m: { title: string; title_ar?: string | null }) =>
-      lang === "ar" ? (m.title_ar ? m.title : null) : (m.title_ar ?? null),
+    // Titre du film dans la langue choisie.
+    title: (m: MovieTitles) => localized(m, "title", lang),
+    // Titre original en second : en anglais seulement pour les films d'origine
+    // française ou arabe ; en français et en arabe, dès qu'il diffère.
+    subtitle: (m: MovieTitles) => originalSubtitle(m, lang),
     synopsis: (m: { synopsis: string | null }) => localized(m, "synopsis", lang) || null,
     city: (c: { name: string; name_ar?: string | null; name_en?: string | null }) =>
       localized(c, "name", lang),
