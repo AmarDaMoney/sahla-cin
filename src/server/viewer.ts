@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import type { Auth } from "./auth";
+import { adminEmails } from "./config";
 import type { Db } from "./db/client";
 import { user_roles } from "./db/schema";
 
@@ -12,15 +13,8 @@ export type Viewer = {
   roles: AppRole[];
 };
 
-// Adresses ayant automatiquement le rôle admin (une fois l'adresse vérifiée).
-// Retirer une adresse de ADMIN_EMAILS retire le rôle immédiatement.
-function adminEmails(): string[] {
-  return (process.env["ADMIN_EMAILS"] ?? "")
-    .split(",")
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
-}
-
+// Les adresses de ADMIN_EMAILS ont automatiquement le rôle admin, une fois
+// l'adresse vérifiée. Retirer une adresse retire le rôle immédiatement.
 export async function getViewer(db: Db, auth: Auth, headers: Headers): Promise<Viewer | null> {
   const session = await auth.api.getSession({ headers });
   if (!session) return null;

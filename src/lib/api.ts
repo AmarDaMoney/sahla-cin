@@ -11,6 +11,7 @@ import { z } from "zod";
 import { requireRole, requireUser, withViewer } from "@/lib/middleware";
 import type { PaymentStart } from "@/lib/payments";
 import { AppError } from "@/lib/errors";
+import { envValue } from "@/server/config";
 import { serialize, type Serialized } from "@/server/serialize";
 import * as admin from "@/server/services/admin";
 import * as booking from "@/server/services/booking";
@@ -55,7 +56,7 @@ export const getMe = createServerFn({ method: "GET" })
 
 // Options de connexion disponibles (Google seulement si configuré).
 export const fetchAuthOptions = createServerFn({ method: "GET" }).handler(async () => ({
-  google: !!(process.env["GOOGLE_CLIENT_ID"] && process.env["GOOGLE_CLIENT_SECRET"]),
+  google: !!(envValue("GOOGLE_CLIENT_ID") && envValue("GOOGLE_CLIENT_SECRET")),
 }));
 
 /* ------------------------------------------------------------ Catalogue */
@@ -149,7 +150,7 @@ export const startOnlinePayment = createServerFn({ method: "POST" })
     if (b.status !== "en_attente_paiement" || b.payment_method === "espece") {
       throw new AppError("NOT_PAYABLE", "Cette réservation ne peut pas être payée en ligne");
     }
-    if (process.env["PAYMENT_MODE"] !== "simulation") {
+    if (envValue("PAYMENT_MODE") !== "simulation") {
       throw new AppError(
         "PAYMENT_UNAVAILABLE",
         "Le paiement en ligne n'est pas encore disponible. Choisissez « Paiement au guichet ».",

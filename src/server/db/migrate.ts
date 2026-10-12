@@ -6,6 +6,7 @@ import { resolve } from "node:path";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
+import { envValue } from "../config";
 
 const LOCK_ID = 727_272;
 let pending: Promise<void> | undefined;
@@ -19,7 +20,7 @@ export function ensureMigrated(): Promise<void> {
 }
 
 async function run() {
-  const url = process.env["DATABASE_URL"]?.trim();
+  const url = envValue("DATABASE_URL");
   if (!url) return;
   const folder = resolve(process.cwd(), "drizzle");
   if (!existsSync(folder)) {

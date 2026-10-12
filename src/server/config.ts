@@ -2,7 +2,30 @@
 // du service sur Railway). Tolère les erreurs de saisie courantes, et repère
 // les valeurs d'exemple recopiées depuis .env.example.
 
-const env = (name: string) => process.env[name]?.trim() ?? "";
+// Valeur d'une variable, sans espaces ni guillemets autour (erreur fréquente :
+// saisir "valeur" avec les guillemets dans l'interface de Railway).
+export function envValue(name: string): string {
+  return (process.env[name] ?? "")
+    .trim()
+    .replace(/^(["'])(.*)\1$/s, "$2")
+    .trim();
+}
+const env = envValue;
+
+// Adresses des administrateurs : séparées par des virgules, points-virgules ou
+// espaces ; insensibles à la casse ; « Nom <adresse> » accepté.
+export function adminEmails(): string[] {
+  return env("ADMIN_EMAILS")
+    .split(/[\s,;]+/)
+    .map((e) =>
+      e
+        .replace(/^.*</, "")
+        .replace(/[<>"']/g, "")
+        .trim()
+        .toLowerCase(),
+    )
+    .filter((e) => e.includes("@") && !isExampleValue(e));
+}
 
 // Valeurs d'exemple de .env.example : présentes mais inutilisables.
 const EXAMPLE_MARKERS = ["changez-moi", "votre-domaine", "vous@exemple.com", "<project-ref>"];
@@ -60,7 +83,7 @@ export function configChecks(): ConfigCheck[] {
     },
     {
       name: "ADMIN_EMAILS",
-      ok: usable("ADMIN_EMAILS"),
+      ok: adminEmails().length > 0,
       required: false,
       hint: "Votre adresse e-mail, pour être administrateur",
     },

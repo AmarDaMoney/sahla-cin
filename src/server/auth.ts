@@ -4,7 +4,7 @@ import type { Db } from "./db/client";
 import { getDb } from "./db/client";
 import * as schema from "./db/schema";
 import { AppError } from "@/lib/errors";
-import { appUrl, authSecret } from "./config";
+import { appUrl, authSecret, envValue } from "./config";
 import { actionEmail, sendEmail } from "./email";
 
 // Authentification : e-mail + mot de passe (adresse vérifiée obligatoire),
@@ -12,8 +12,8 @@ import { actionEmail, sendEmail } from "./email";
 // stockées en base, dans un cookie httpOnly.
 export function createAuth(db: Db) {
   const baseURL = appUrl();
-  const googleId = process.env["GOOGLE_CLIENT_ID"];
-  const googleSecret = process.env["GOOGLE_CLIENT_SECRET"];
+  const googleId = envValue("GOOGLE_CLIENT_ID");
+  const googleSecret = envValue("GOOGLE_CLIENT_SECRET");
 
   return betterAuth({
     baseURL,
@@ -35,7 +35,7 @@ export function createAuth(db: Db) {
       // l'hébergeur (sert à limiter les tentatives de connexion par IP).
       // Railway : X-Real-IP. À vérifier/adapter via CLIENT_IP_HEADER.
       ipAddress: {
-        ipAddressHeaders: [(process.env["CLIENT_IP_HEADER"] ?? "x-real-ip").toLowerCase()],
+        ipAddressHeaders: [(envValue("CLIENT_IP_HEADER") || "x-real-ip").toLowerCase()],
       },
     },
     emailAndPassword: {

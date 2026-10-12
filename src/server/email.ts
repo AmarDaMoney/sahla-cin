@@ -1,4 +1,4 @@
-import { isExampleValue } from "./config";
+import { envValue, isExampleValue } from "./config";
 
 // Envoi d'e-mails via l'API HTTP de Resend (Railway bloque le SMTP sortant
 // sur certaines offres ; une API HTTP fonctionne partout).
@@ -15,8 +15,8 @@ function logEmail(reason: string, email: Email) {
 }
 
 export async function sendEmail(email: Email): Promise<void> {
-  const apiKey = process.env["RESEND_API_KEY"]?.trim();
-  const configuredFrom = process.env["EMAIL_FROM"]?.trim();
+  const apiKey = envValue("RESEND_API_KEY");
+  const configuredFrom = envValue("EMAIL_FROM");
   // Sans expéditeur valide : adresse de test de Resend (n'envoie qu'au
   // propriétaire du compte Resend, suffisant pour démarrer).
   const from =

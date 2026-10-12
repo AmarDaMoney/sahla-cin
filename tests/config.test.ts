@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { appUrl, authSecret, configChecks } from "@/server/config";
+import { adminEmails, appUrl, authSecret, configChecks, envValue } from "@/server/config";
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -48,5 +48,19 @@ describe("example values from .env.example", () => {
     const checks = configChecks();
     expect(checks.find((c) => c.name === "RESEND_API_KEY")?.ok).toBe(false);
     expect(checks.find((c) => c.name === "EMAIL_FROM")?.ok).toBe(false);
+  });
+});
+
+describe("adminEmails", () => {
+  it("tolerates quotes, spaces, separators, case and 'Name <email>'", () => {
+    vi.stubEnv("ADMIN_EMAILS", ' "Boss@Example.com" ; Other <second@example.dz>, ');
+    expect(adminEmails()).toEqual(["boss@example.com", "second@example.dz"]);
+    vi.stubEnv("ADMIN_EMAILS", "vous@exemple.com");
+    expect(adminEmails()).toEqual([]);
+  });
+
+  it("strips quotes from any setting", () => {
+    vi.stubEnv("PAYMENT_MODE", '"simulation"');
+    expect(envValue("PAYMENT_MODE")).toBe("simulation");
   });
 });

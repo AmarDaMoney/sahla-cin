@@ -8,7 +8,7 @@ import { createTestDb } from "./helpers";
 
 vi.stubEnv("BETTER_AUTH_URL", "http://localhost:8080");
 vi.stubEnv("BETTER_AUTH_SECRET", "test-secret-test-secret-test-secret-123");
-vi.stubEnv("ADMIN_EMAILS", "boss@example.com");
+vi.stubEnv("ADMIN_EMAILS", '"boss@example.com"');
 
 let db: Db;
 let auth: ReturnType<typeof createAuth>;
