@@ -1,10 +1,10 @@
-<!-- LOVABLE:BEGIN -->
-> [!IMPORTANT]
-> This project is connected to [Lovable](https://lovable.dev). Avoid rewriting
-> published git history — force pushing, or rebasing/amending/squashing commits
-> that are already pushed — as it rewrites history on Lovable's side and the
-> user will likely lose their project history.
->
-> Commits you push to the connected branch sync back to Lovable and show up in
-> the editor, so keep the branch in a working state.
-<!-- LOVABLE:END -->
+# Notes for coding agents
+
+- Database changes go in a new file under `supabase/migrations/` (never edit an
+  applied migration). Update `src/integrations/supabase/types.ts` to match
+  (`npx supabase gen types typescript --linked > src/integrations/supabase/types.ts`).
+- Customers must never write to `bookings`, `booking_seats` or `tickets`
+  directly: use the SQL functions described in README.md.
+- `SUPABASE_SERVICE_ROLE_KEY` is only used in server code
+  (`client.server.ts`, server functions). Never import it from a component.
+- Run `bun run typecheck`, `bun run lint` and `bun run build` before pushing.
