@@ -64,3 +64,38 @@ describe("adminEmails", () => {
     expect(envValue("PAYMENT_MODE")).toBe("simulation");
   });
 });
+
+describe("email diagnostics", () => {
+  it("uses EMAIL_FROM's domain, or Resend's test sender", async () => {
+    const { senderDomain, usesTestSender } = await import("@/server/email");
+    vi.stubEnv("EMAIL_FROM", "");
+    expect(usesTestSender()).toBe(true);
+    vi.stubEnv("EMAIL_FROM", '"BookCinéDZ <billets@Sahla.dz>"');
+    expect(usesTestSender()).toBe(false);
+    expect(senderDomain()).toBe("sahla.dz");
+  });
+
+  it("never shows an e-mail address in the reported error", async () => {
+    const { redactEmails } = await import("@/server/email");
+    expect(
+      redactEmails(
+        '403 {"message":"You can only send testing emails to your own email address (owner@gmail.com)."}',
+      ),
+    ).toBe('403 {"message":"You can only send testing emails to your own email address (…@…)."}');
+  });
+
+  it("remembers the last Resend refusal", async () => {
+    const { lastEmailResult, sendEmail } = await import("@/server/email");
+    vi.stubEnv("RESEND_API_KEY", "re_test_key");
+    vi.stubEnv("EMAIL_FROM", "billets@sahla.dz");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response('{"message":"The sahla.dz domain is not verified"}', { status: 403 }),
+    );
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "info").mockImplementation(() => {});
+    await sendEmail({ to: "a@b.dz", subject: "s", html: "h", text: "t" });
+    expect(lastEmailResult()).toMatchObject({ ok: false });
+    expect(lastEmailResult()!.detail).toContain("domain is not verified");
+    vi.restoreAllMocks();
+  });
+});

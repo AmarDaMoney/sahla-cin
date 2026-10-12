@@ -16,15 +16,43 @@ function logEmail(reason: string, email: Email) {
   );
 }
 
+const TEST_SENDER = "BookCinéDZ <onboarding@resend.dev>";
+
+// Sans expéditeur valide : adresse de test de Resend (n'envoie qu'au
+// propriétaire du compte Resend, suffisant pour démarrer).
+export function emailSender() {
+  const configured = envValue("EMAIL_FROM");
+  return configured && !isExampleValue(configured) ? configured : TEST_SENDER;
+}
+
+export const usesTestSender = () => emailSender() === TEST_SENDER;
+
+// Domaine de l'expéditeur (« BookCinéDZ <billets@exemple.dz> » → « exemple.dz »).
+export function senderDomain() {
+  return (
+    emailSender()
+      .match(/@([^\s>]+)/)?.[1]
+      ?.toLowerCase() ?? null
+  );
+}
+
+// Résultat du dernier envoi, montré par /api/health pour comprendre un e-mail
+// qui n'arrive pas sans fouiller les logs. Les adresses sont masquées.
+let lastSend: { at: Date; ok: boolean; detail: string } | null = null;
+
+export const lastEmailResult = () => lastSend;
+
+export function redactEmails(text: string) {
+  return text.replace(/[^\s@"'<>(),;:]+@[^\s@"'<>(),;:]+/g, "…@…").slice(0, 300);
+}
+
+function remember(ok: boolean, detail: string) {
+  lastSend = { at: new Date(), ok, detail: redactEmails(detail) };
+}
+
 export async function sendEmail(email: Email): Promise<void> {
   const apiKey = envValue("RESEND_API_KEY");
-  const configuredFrom = envValue("EMAIL_FROM");
-  // Sans expéditeur valide : adresse de test de Resend (n'envoie qu'au
-  // propriétaire du compte Resend, suffisant pour démarrer).
-  const from =
-    configuredFrom && !isExampleValue(configuredFrom)
-      ? configuredFrom
-      : "BookCinéDZ <onboarding@resend.dev>";
+  const from = emailSender();
 
   if (!apiKey || isExampleValue(apiKey)) {
     logEmail("RESEND_API_KEY absent — e-mail NON envoyé", email);
@@ -38,11 +66,16 @@ export async function sendEmail(email: Email): Promise<void> {
       body: JSON.stringify({ from, ...email }),
     });
     if (!res.ok) {
-      console.error(`[email] Resend a refusé l'envoi : ${res.status} ${await res.text()}`);
+      const reason = `${res.status} ${await res.text()}`;
+      console.error(`[email] Resend a refusé l'envoi : ${reason}`);
+      remember(false, `refusé par Resend : ${reason}`);
       logEmail("e-mail NON envoyé", email);
+    } else {
+      remember(true, "envoyé");
     }
   } catch (e) {
     console.error("[email] Resend injoignable", e);
+    remember(false, "Resend injoignable");
     logEmail("e-mail NON envoyé", email);
   }
 }

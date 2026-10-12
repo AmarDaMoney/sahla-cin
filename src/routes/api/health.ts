@@ -3,6 +3,7 @@ import { inArray, sql } from "drizzle-orm";
 import { adminEmails, appUrl, configChecks, envValue, hasClientIp } from "@/server/config";
 import { getDb } from "@/server/db/client";
 import { user } from "@/server/db/schema";
+import { lastEmailResult, senderDomain, usesTestSender } from "@/server/email";
 
 // Diagnostic de l'installation : ouvrir /api/health dans le navigateur.
 // N'affiche que des oui/non, jamais la valeur des réglages ni d'adresse e-mail.
@@ -17,6 +18,13 @@ async function databaseStatus() {
     console.error("[health] base de données", e);
     return "connexion impossible (voir les logs)";
   }
+}
+
+function lastEmailStatus() {
+  const last = lastEmailResult();
+  if (!last) return "aucun envoi depuis le dernier démarrage";
+  const at = last.at.toLocaleString("fr-FR", { timeZone: "Africa/Algiers", hour12: false });
+  return last.ok ? `ok (${at})` : `ÉCHEC (${at}) — ${last.detail}`;
 }
 
 // Les adresses de ADMIN_EMAILS correspondent-elles à des comptes confirmés ?
@@ -60,9 +68,12 @@ export const Route = createFileRoute("/api/health")({
               c.ok ? "ok" : `${c.required ? "MANQUANT" : "absent"} — ${c.hint}`,
             ]),
           ),
-          email: envValue("RESEND_API_KEY")
-            ? "envoyés via Resend"
-            : "non envoyés : liens écrits dans les logs Railway",
+          email: !envValue("RESEND_API_KEY")
+            ? "non envoyés : liens écrits dans les logs Railway"
+            : usesTestSender()
+              ? "adresse de test Resend : n'arrivent QU'AU propriétaire du compte Resend (définir EMAIL_FROM)"
+              : `envoyés via Resend depuis @${senderDomain() ?? "?"} (domaine à vérifier dans CE compte Resend)`,
+          lastEmail: lastEmailStatus(),
           // Sans IP par visiteur, toutes les connexions partagent un même compteur.
           rateLimit: hasClientIp(request.headers)
             ? "par visiteur (IP reçue)"
