@@ -4,7 +4,7 @@ import type { Db } from "./db/client";
 import { getDb } from "./db/client";
 import * as schema from "./db/schema";
 import { AppError } from "@/lib/errors";
-import { appUrl } from "./config";
+import { appUrl, authSecret } from "./config";
 import { actionEmail, sendEmail } from "./email";
 
 // Authentification : e-mail + mot de passe (adresse vérifiée obligatoire),
@@ -17,7 +17,7 @@ export function createAuth(db: Db) {
 
   return betterAuth({
     baseURL,
-    secret: process.env["BETTER_AUTH_SECRET"],
+    secret: authSecret(),
     trustedOrigins: baseURL ? [baseURL] : [],
     database: drizzleAdapter(db, {
       provider: "pg",
@@ -95,8 +95,7 @@ export type Auth = ReturnType<typeof createAuth>;
 // Sans secret solide, Better Auth utiliserait un secret par défaut connu de
 // tous (sessions falsifiables) : on refuse alors toute connexion.
 export function authConfigured(): boolean {
-  const secret = process.env["BETTER_AUTH_SECRET"]?.trim() ?? "";
-  return secret.length >= 32 && !!appUrl();
+  return !!authSecret() && !!appUrl();
 }
 
 let auth: Auth | undefined;

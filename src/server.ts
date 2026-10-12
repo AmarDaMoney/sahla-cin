@@ -44,6 +44,17 @@ function isH3SwallowedErrorBody(body: string): boolean {
   }
 }
 
+// Migrations de la base appliquées avant la première requête. En cas d'échec
+// (base injoignable…), le site répond quand même et /api/health l'indique.
+async function migrateOnce() {
+  try {
+    const { ensureMigrated } = await import("./server/db/migrate");
+    await ensureMigrated();
+  } catch (error) {
+    console.error("[migrations] échec", error);
+  }
+}
+
 // En-têtes de sécurité ajoutés à toutes les réponses.
 const SECURITY_HEADERS: Record<string, string> = {
   "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
@@ -67,6 +78,7 @@ function withSecurityHeaders(response: Response): Response {
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
+      await migrateOnce();
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       return withSecurityHeaders(await normalizeCatastrophicSsrResponse(response));

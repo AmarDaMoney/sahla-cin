@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { appUrl, configChecks } from "@/server/config";
+import { appUrl, authSecret, configChecks } from "@/server/config";
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -24,5 +24,29 @@ describe("configChecks", () => {
     const checks = configChecks();
     expect(checks.find((c) => c.name === "BETTER_AUTH_SECRET")?.ok).toBe(false);
     expect(JSON.stringify(checks)).not.toContain("trop-court");
+  });
+});
+
+describe("example values from .env.example", () => {
+  it("ignores a localhost address when running on Railway", () => {
+    vi.stubEnv("BETTER_AUTH_URL", "http://localhost:8080");
+    vi.stubEnv("RAILWAY_PUBLIC_DOMAIN", "sahla.up.railway.app");
+    expect(appUrl()).toBe("https://sahla.up.railway.app");
+    expect(configChecks().find((c) => c.name === "BETTER_AUTH_URL")?.ok).toBe(true);
+  });
+
+  it("rejects the example secret even though it is long enough", () => {
+    vi.stubEnv("BETTER_AUTH_SECRET", "changez-moi-avec-openssl-rand-base64-32");
+    expect(authSecret()).toBeUndefined();
+    vi.stubEnv("BETTER_AUTH_SECRET", "x".repeat(40));
+    expect(authSecret()).toBe("x".repeat(40));
+  });
+
+  it("flags example sender and non-Resend keys", () => {
+    vi.stubEnv("RESEND_API_KEY", "ma-cle");
+    vi.stubEnv("EMAIL_FROM", "BookCinéDZ <billets@votre-domaine.dz>");
+    const checks = configChecks();
+    expect(checks.find((c) => c.name === "RESEND_API_KEY")?.ok).toBe(false);
+    expect(checks.find((c) => c.name === "EMAIL_FROM")?.ok).toBe(false);
   });
 });

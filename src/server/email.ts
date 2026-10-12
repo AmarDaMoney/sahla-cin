@@ -1,30 +1,47 @@
+import { isExampleValue } from "./config";
+
 // Envoi d'e-mails via l'API HTTP de Resend (Railway bloque le SMTP sortant
 // sur certaines offres ; une API HTTP fonctionne partout).
-// Sans RESEND_API_KEY : le contenu de l'e-mail est écrit dans les logs.
+// Sans RESEND_API_KEY, ou si l'envoi échoue : le contenu est écrit dans les logs.
 
 type Email = { to: string; subject: string; html: string; text: string };
 
-export async function sendEmail(email: Email): Promise<void> {
-  const apiKey = process.env["RESEND_API_KEY"];
-  const from = process.env["EMAIL_FROM"] ?? "BookCinéDZ <onboarding@resend.dev>";
+// Écrit l'e-mail dans les logs (visibles uniquement par les membres du projet
+// Railway), pour pouvoir utiliser ses liens quand il n'a pas pu partir.
+function logEmail(reason: string, email: Email) {
+  console.info(
+    `[email] ${reason} — contenu ci-dessous.\nÀ: ${email.to}\nSujet: ${email.subject}\n${email.text}`,
+  );
+}
 
-  if (!apiKey) {
-    // Pas encore de service d'e-mail : le message (et son lien) est écrit dans
-    // les logs, visibles uniquement par les membres du projet Railway. Pratique
-    // pour démarrer ; à remplacer par Resend avant d'ouvrir au public.
-    console.info(
-      `[email] RESEND_API_KEY absent — e-mail NON envoyé, contenu ci-dessous.\nÀ: ${email.to}\nSujet: ${email.subject}\n${email.text}`,
-    );
+export async function sendEmail(email: Email): Promise<void> {
+  const apiKey = process.env["RESEND_API_KEY"]?.trim();
+  const configuredFrom = process.env["EMAIL_FROM"]?.trim();
+  // Sans expéditeur valide : adresse de test de Resend (n'envoie qu'au
+  // propriétaire du compte Resend, suffisant pour démarrer).
+  const from =
+    configuredFrom && !isExampleValue(configuredFrom)
+      ? configuredFrom
+      : "BookCinéDZ <onboarding@resend.dev>";
+
+  if (!apiKey || isExampleValue(apiKey)) {
+    logEmail("RESEND_API_KEY absent — e-mail NON envoyé", email);
     return;
   }
 
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from, ...email }),
-  });
-  if (!res.ok) {
-    console.error(`[email] échec d'envoi à ${email.to}: ${res.status} ${await res.text()}`);
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from, ...email }),
+    });
+    if (!res.ok) {
+      console.error(`[email] Resend a refusé l'envoi : ${res.status} ${await res.text()}`);
+      logEmail("e-mail NON envoyé", email);
+    }
+  } catch (e) {
+    console.error("[email] Resend injoignable", e);
+    logEmail("e-mail NON envoyé", email);
   }
 }
 
