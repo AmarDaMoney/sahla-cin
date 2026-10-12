@@ -6,7 +6,7 @@ scanner for counter agents. Cinemas submit their programmes; an admin
 reviews and publishes them.
 
 **Stack:** TanStack Start (React 19, SSR) · Tailwind 4 + shadcn/ui · Supabase
-(Postgres, Auth, Storage) · Nitro (deploys to Vercel, Netlify, Cloudflare or a
+(Postgres, Auth, Storage) · Nitro (hosted on Railway; also deploys to Vercel, Netlify, Cloudflare or a
 plain Node server).
 
 ## Run locally
@@ -48,15 +48,23 @@ Checks: `bun run typecheck`, `bun run lint`, `bun run build`.
    Counter agents need the `agent_guichet` role **and** an assignment to their
    cinema (admin page → staff), otherwise the scanner refuses their tickets.
 
-## Deploy (Vercel example)
+## Deploy on Railway
 
-1. Import the GitHub repo in Vercel. Nitro detects Vercel automatically.
-2. Add the environment variables from `.env.example` (Production + Preview).
-   `SUPABASE_SERVICE_ROLE_KEY` is secret: never prefix it with `VITE_`.
-3. Point your domain at Vercel and update the Supabase Site URL (step 3 above).
+The repo includes `railway.json` (build with Bun, start the Node server,
+health check on `/`). Railway sets `PORT`; the server listens on it.
 
-Any other host works too: `bun run build` then `node .output/server/index.mjs`,
-or set `NITRO_PRESET` (`netlify`, `cloudflare-module`, `node-server`…).
+1. Railway → **New Project → Deploy from GitHub repo** → `sahla-cin`
+   (branch `main`; every push to `main` redeploys).
+2. Service → **Variables**: add every variable from `.env.example`.
+   The `VITE_*` ones are baked into the browser bundle at build time, so
+   redeploy after changing them. `SUPABASE_SERVICE_ROLE_KEY` is secret: never
+   prefix it with `VITE_`.
+3. Service → **Settings → Networking → Generate Domain** (or add your own
+   domain), then put that URL in Supabase → Authentication → URL Configuration
+   (Site URL + Redirect URLs).
+
+Other hosts work too: `bun run build` then `node .output/server/index.mjs`,
+or set `NITRO_PRESET` (`vercel`, `netlify`, `cloudflare-module`…).
 
 ## How booking and payment work
 
