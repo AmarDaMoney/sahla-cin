@@ -37,7 +37,7 @@ Checks: `bun run typecheck`, `bun run lint`, `bun run build`.
 4. **Authentication → Emails → SMTP**: plug in a real email provider
    (Resend, Brevo, Amazon SES…). Supabase's built-in sender is limited to a
    few emails per hour and is not meant for production.
-5. *(Optional)* **Authentication → Providers → Google**: add a Google OAuth
+5. _(Optional)_ **Authentication → Providers → Google**: add a Google OAuth
    client ID/secret to enable "Continuer avec Google".
 6. **Storage**: create a public bucket named `posters` (movie posters).
 7. Make yourself admin: sign up in the app, then in the SQL editor:
@@ -64,13 +64,13 @@ All writes to `bookings`, `booking_seats` and `tickets` go through Postgres
 functions (see `supabase/migrations/20261012120000_secure_booking_flow.sql`);
 the browser cannot set prices, statuses or QR codes.
 
-| Step | Function | Who can call it |
-| --- | --- | --- |
-| Show taken seats | `get_taken_seats` | everyone |
-| Reserve seats (atomic, price from DB, unpaid hold) | `book_seats` | signed-in users |
-| Abandon an unpaid booking | `cancel_pending_booking` | the booking owner |
-| Mark an online payment as paid | `confirm_booking_payment` | **server only** (service role) |
-| Check a ticket / collect cash at the counter | `scan_ticket` | admins, agents of that cinema |
+| Step                                               | Function                  | Who can call it                |
+| -------------------------------------------------- | ------------------------- | ------------------------------ |
+| Show taken seats                                   | `get_taken_seats`         | everyone                       |
+| Reserve seats (atomic, price from DB, unpaid hold) | `book_seats`              | signed-in users                |
+| Abandon an unpaid booking                          | `cancel_pending_booking`  | the booking owner              |
+| Mark an online payment as paid                     | `confirm_booking_payment` | **server only** (service role) |
+| Check a ticket / collect cash at the counter       | `scan_ticket`             | admins, agents of that cinema  |
 
 Unpaid holds expire after 15 minutes (online) or 15 minutes before the show
 (pay at the counter, max 2 pending per user).

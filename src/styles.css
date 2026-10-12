@@ -97,9 +97,9 @@
   --sidebar-ring: oklch(0.704 0.04 256.788);
 }
 
-
 /* --- Identité BookCinéDZ : bleu nuit #0f172a & rouge #dc2626 --- */
-:root, .dark {
+:root,
+.dark {
   --radius: 0.9rem;
   --background: oklch(0.21 0.034 264.7);
   --foreground: oklch(0.985 0 0);
@@ -154,7 +154,8 @@
   body {
     font-family: ui-sans-serif, system-ui, "Segoe UI", sans-serif;
   }
-  [dir="rtl"], .arabic {
+  [dir="rtl"],
+  .arabic {
     font-family: "Noto Naskh Arabic", "Geeza Pro", "Segoe UI", serif;
   }
 }

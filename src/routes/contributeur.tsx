@@ -35,7 +35,8 @@ export const Route = createFileRoute("/contributeur")({
       { title: "Espace contributeur — BookCinéDZ" },
       {
         name: "description",
-        content: "Saisissez le programme hebdomadaire de votre cinéma et soumettez-le à validation.",
+        content:
+          "Saisissez le programme hebdomadaire de votre cinéma et soumettez-le à validation.",
       },
       { property: "og:title", content: "Espace contributeur — BookCinéDZ" },
       { property: "og:description", content: "Gestion du programme d'un cinéma partenaire." },
@@ -282,7 +283,9 @@ function Contributor() {
                           aria-label={t.common.delete}
                           onClick={async () => {
                             await deleteScreening(s.id);
-                            await queryClient.invalidateQueries({ queryKey: ["cinema-screenings"] });
+                            await queryClient.invalidateQueries({
+                              queryKey: ["cinema-screenings"],
+                            });
                           }}
                         >
                           <Trash2 className="size-4" />

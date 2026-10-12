@@ -149,7 +149,8 @@ function MoviePage() {
                               {timeFmt.format(new Date(s.starts_at))}
                             </span>
                             <span className="text-[10px] opacity-80">
-                              {t.languages[s.audio_language]} · {s.hall.name} · {s.price} {t.common.da}
+                              {t.languages[s.audio_language]} · {s.hall.name} · {s.price}{" "}
+                              {t.common.da}
                             </span>
                           </Link>
                         </Button>

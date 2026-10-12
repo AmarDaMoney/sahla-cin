@@ -37,7 +37,8 @@ export const Route = createFileRoute("/admin")({
       { title: "Espace administrateur — BookCinéDZ" },
       {
         name: "description",
-        content: "Validez les programmes soumis, gérez le catalogue de films et les rôles des utilisateurs.",
+        content:
+          "Validez les programmes soumis, gérez le catalogue de films et les rôles des utilisateurs.",
       },
       { property: "og:title", content: "Administration — BookCinéDZ" },
       { property: "og:description", content: "Validation des programmes et gestion du catalogue." },
@@ -88,7 +89,9 @@ function Admin() {
       <div className="min-h-screen pb-24">
         <AppHeader />
         <main className="mx-auto max-w-3xl px-4 py-16 text-center">
-          <p className="text-sm text-muted-foreground">Cet espace est réservé aux administrateurs.</p>
+          <p className="text-sm text-muted-foreground">
+            Cet espace est réservé aux administrateurs.
+          </p>
           <Button asChild className="mt-4 rounded-xl">
             <Link to="/compte">{t.nav.account}</Link>
           </Button>
@@ -118,7 +121,14 @@ function Admin() {
         age_rating: form.age_rating || null,
       });
       toast.success("Film ajouté");
-      setForm({ title: "", duration_minutes: "120", genre: "", synopsis: "", poster_url: "", age_rating: "" });
+      setForm({
+        title: "",
+        duration_minutes: "120",
+        genre: "",
+        synopsis: "",
+        poster_url: "",
+        age_rating: "",
+      });
       await queryClient.invalidateQueries({ queryKey: ["movies"] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erreur");
@@ -163,7 +173,9 @@ function Admin() {
 
           <TabsContent value="queue" className="mt-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-primary">{t.admin.queue}</h2>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-primary">
+                {t.admin.queue}
+              </h2>
               <Button size="sm" className="rounded-xl" onClick={publishAll}>
                 <CheckCheck className="size-4" />
                 {t.admin.publish}
@@ -203,7 +215,9 @@ function Admin() {
 
           <TabsContent value="movies" className="mt-4 space-y-4">
             <div className="rounded-2xl border border-border bg-card p-4">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-primary">Nouveau film</h2>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-primary">
+                Nouveau film
+              </h2>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5 sm:col-span-2">
                   <Label htmlFor="title">Titre</Label>

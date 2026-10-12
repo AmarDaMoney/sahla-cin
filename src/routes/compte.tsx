@@ -60,7 +60,11 @@ function Account() {
                   </Badge>
                 ))}
               </div>
-              <Button variant="outline" className="mt-4 w-full rounded-xl" onClick={() => signOut()}>
+              <Button
+                variant="outline"
+                className="mt-4 w-full rounded-xl"
+                onClick={() => signOut()}
+              >
                 <LogOut className="size-4" />
                 {t.common.signOut}
               </Button>
@@ -113,7 +117,11 @@ function Account() {
           </Button>
         </div>
 
-        <Accordion type="single" collapsible className="mt-6 rounded-2xl border border-border bg-card px-4">
+        <Accordion
+          type="single"
+          collapsible
+          className="mt-6 rounded-2xl border border-border bg-card px-4"
+        >
           <AccordionItem value="about">
             <AccordionTrigger className="text-sm">
               <span className="flex items-center gap-2">

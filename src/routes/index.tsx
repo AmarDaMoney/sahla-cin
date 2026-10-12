@@ -61,7 +61,10 @@ function Index() {
   const [showFilters, setShowFilters] = useState(false);
 
   const cities = useQuery({ queryKey: ["cities"], queryFn: fetchCities });
-  const screenings = useQuery({ queryKey: ["screenings", "published"], queryFn: fetchPublishedScreenings });
+  const screenings = useQuery({
+    queryKey: ["screenings", "published"],
+    queryFn: fetchPublishedScreenings,
+  });
 
   const list = screenings.data ?? [];
 
@@ -294,7 +297,11 @@ function Index() {
                     .map((g) => g.trim())
                     .filter(Boolean)
                     .map((g) => (
-                      <Badge key={g} variant="secondary" className="rounded-full text-[11px] font-normal">
+                      <Badge
+                        key={g}
+                        variant="secondary"
+                        className="rounded-full text-[11px] font-normal"
+                      >
                         {g}
                       </Badge>
                     ))}

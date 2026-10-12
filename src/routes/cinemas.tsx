@@ -39,7 +39,8 @@ function Cinemas() {
         </p>
 
         <div className="mt-5 space-y-3">
-          {cinemas.isLoading && [0, 1, 2].map((i) => <Skeleton key={i} className="h-28 rounded-2xl" />)}
+          {cinemas.isLoading &&
+            [0, 1, 2].map((i) => <Skeleton key={i} className="h-28 rounded-2xl" />)}
           {(cinemas.data ?? []).map((c) => (
             <Link
               key={c.id}
@@ -59,7 +60,11 @@ function Cinemas() {
                   </p>
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {(c.halls ?? []).map((h) => (
-                      <Badge key={h.id} variant="secondary" className="rounded-full text-[11px] font-normal">
+                      <Badge
+                        key={h.id}
+                        variant="secondary"
+                        className="rounded-full text-[11px] font-normal"
+                      >
                         {h.name} · {h.capacity} {t.cinema.capacity}
                       </Badge>
                     ))}

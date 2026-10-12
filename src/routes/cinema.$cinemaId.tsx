@@ -26,10 +26,19 @@ export const Route = createFileRoute("/cinema/$cinemaId")({
   component: CinemaPage,
 });
 
-const dayFmt = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short" });
+const dayFmt = new Intl.DateTimeFormat("fr-FR", {
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+});
 const timeFmt = new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" });
 
-function mapsLink(cinema: { name: string; address: string | null; latitude: number | null; longitude: number | null }) {
+function mapsLink(cinema: {
+  name: string;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+}) {
   if (cinema.latitude != null && cinema.longitude != null) {
     return `https://www.google.com/maps/search/?api=1&query=${cinema.latitude},${cinema.longitude}`;
   }
