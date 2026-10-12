@@ -2,7 +2,7 @@
 // Clé : TMDB_API_KEY (clé API v3 ou jeton de lecture v4), sur themoviedb.org →
 // Paramètres → API. Ce produit utilise l'API TMDB mais n'est ni approuvé ni
 // certifié par TMDB (mention obligatoire, affichée dans « À propos »).
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { AppError } from "@/lib/errors";
 import { envValue } from "../config";
 import type { Db } from "../db/client";
@@ -157,6 +157,44 @@ async function copyPoster(db: Db, userId: string, path: string | null, fetchImpl
   }
 }
 
+function fetchDetails(tmdbId: number, fetchImpl: Fetch) {
+  return tmdbGet<Details>(
+    `/movie/${tmdbId}`,
+    {
+      language: "fr-FR",
+      append_to_response: "videos,translations,release_dates",
+      include_video_language: "fr,en,null",
+    },
+    fetchImpl,
+  );
+}
+
+// Champs de la fiche tirés de TMDB (sans l'affiche, copiée à part).
+function detailsToValues(d: Details) {
+  const ar = translation(d, "ar");
+  const en = translation(d, "en");
+  const englishOriginal = d.original_language === "en";
+  return {
+    title: d.title || d.original_title,
+    title_ar: ar.title,
+    title_en: en.title ?? (englishOriginal ? d.original_title : null),
+    original_title: d.original_title || null,
+    original_language: d.original_language || null,
+    synopsis: d.overview?.trim() || null,
+    synopsis_ar: ar.overview,
+    synopsis_en: en.overview,
+    // 0 ou absent pour les films pas encore sortis.
+    duration_minutes: d.runtime && d.runtime > 0 ? Math.min(d.runtime, 600) : null,
+    genre:
+      d.genres
+        .map((g) => GENRES[g.id] ?? g.name)
+        .slice(0, 3)
+        .join(", ") || null,
+    age_rating: frenchRating(d),
+    trailer_url: trailerUrl(d),
+  };
+}
+
 // Crée la fiche du film (ou renvoie celle déjà importée) et retourne son id.
 export async function importTmdb(
   db: Db,
@@ -170,39 +208,14 @@ export async function importTmdb(
     .where(eq(movies.tmdb_id, tmdbId));
   if (existing) return { movieId: existing.id, created: false };
 
-  const d = await tmdbGet<Details>(
-    `/movie/${tmdbId}`,
-    {
-      language: "fr-FR",
-      append_to_response: "videos,translations,release_dates",
-      include_video_language: "fr,en,null",
-    },
-    fetchImpl,
-  );
-  const ar = translation(d, "ar");
-  const en = translation(d, "en");
-  const englishOriginal = d.original_language === "en";
-
+  const d = await fetchDetails(tmdbId, fetchImpl);
+  const values = detailsToValues(d);
   const [row] = await db
     .insert(movies)
     .values({
+      ...values,
       tmdb_id: d.id,
-      title: d.title || d.original_title,
-      title_ar: ar.title,
-      title_en: en.title ?? (englishOriginal ? d.original_title : null),
-      original_title: d.original_title || null,
-      original_language: d.original_language || null,
-      synopsis: d.overview?.trim() || null,
-      synopsis_ar: ar.overview,
-      synopsis_en: en.overview,
-      duration_minutes: d.runtime && d.runtime > 0 ? Math.min(d.runtime, 600) : 100,
-      genre:
-        d.genres
-          .map((g) => GENRES[g.id] ?? g.name)
-          .slice(0, 3)
-          .join(", ") || null,
-      age_rating: frenchRating(d),
-      trailer_url: trailerUrl(d),
+      duration_minutes: values.duration_minutes ?? 100,
       poster_url: await copyPoster(db, userId, d.poster_path, fetchImpl),
     })
     .onConflictDoNothing({ target: movies.tmdb_id })
@@ -212,4 +225,127 @@ export async function importTmdb(
   // Importé en parallèle par quelqu'un d'autre.
   const [again] = await db.select({ id: movies.id }).from(movies).where(eq(movies.tmdb_id, tmdbId));
   return { movieId: again!.id, created: false };
+}
+
+/* -------------------------------------------- Compléter les fiches existantes */
+
+// « Spider-Man : Brand New Day » et « spider man brand new day » sont le même titre.
+export function normalizeTitle(title: string) {
+  return title
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+const YEAR = 365 * 24 * 60 * 60_000;
+
+// Ne retient un film TMDB que si son titre correspond exactement. Plusieurs
+// films du même titre (« Moana » 2016 et 2026) : le plus récent sorti dans
+// les deux dernières années, sinon on ne devine pas.
+async function findMatch(titles: string[], fetchImpl: Fetch, now: Date) {
+  const wanted = new Set(titles.map(normalizeTitle).filter(Boolean));
+  for (const query of titles) {
+    const data = await tmdbGet<SearchResponse>(
+      "/search/movie",
+      { query, language: "fr-FR", include_adult: "false" },
+      fetchImpl,
+    );
+    const exact = data.results.filter(
+      (r) => wanted.has(normalizeTitle(r.title)) || wanted.has(normalizeTitle(r.original_title)),
+    );
+    const recent = exact
+      .filter((r) => r.release_date && Date.parse(r.release_date) >= now.getTime() - 2 * YEAR)
+      .sort((a, b) => b.release_date!.localeCompare(a.release_date!));
+    if (recent[0]) return recent[0].id;
+    if (exact.length === 1) return exact[0]!.id;
+  }
+  return null;
+}
+
+export type EnrichReport = { updated: string[]; notFound: string[]; failed: string[] };
+
+// Relie à TMDB les films saisis à la main (ou de démonstration) et complète
+// les champs vides : affiche, traductions, durée, genres, classification,
+// bande-annonce. Ce qui a été saisi n'est jamais écrasé, sauf pour les ids
+// de `replaceIds` (films de démonstration, au texte inventé).
+export async function enrichMovies(
+  db: Db,
+  userId: string,
+  {
+    fetchImpl = fetch,
+    now = new Date(),
+    replaceIds = [] as readonly string[],
+  }: { fetchImpl?: Fetch; now?: Date; replaceIds?: readonly string[] } = {},
+): Promise<EnrichReport> {
+  const report: EnrichReport = { updated: [], notFound: [], failed: [] };
+  const list = await db.select().from(movies).where(isNull(movies.tmdb_id)).orderBy(movies.title);
+
+  for (const movie of list) {
+    const titles = [
+      ...new Set(
+        [movie.original_title, movie.title_en, movie.title].filter((t): t is string => !!t),
+      ),
+    ];
+    let tmdbId: number | null;
+    try {
+      tmdbId = await findMatch(titles, fetchImpl, now);
+    } catch (e) {
+      // Clé refusée : inutile de continuer, l'administrateur doit corriger.
+      if (e instanceof AppError && e.code === "TMDB_BAD_KEY") throw e;
+      console.error("[tmdb] recherche", movie.title, e);
+      report.failed.push(movie.title);
+      continue;
+    }
+    if (tmdbId === null) {
+      report.notFound.push(movie.title);
+      continue;
+    }
+    // Déjà relié à une autre fiche (doublon) : on n'y touche pas.
+    const [taken] = await db
+      .select({ id: movies.id })
+      .from(movies)
+      .where(eq(movies.tmdb_id, tmdbId));
+    if (taken) {
+      report.notFound.push(movie.title);
+      continue;
+    }
+
+    try {
+      const d = await fetchDetails(tmdbId, fetchImpl);
+      const replace = replaceIds.includes(movie.id);
+      const fresh = detailsToValues(d);
+      const set: Partial<typeof movies.$inferInsert> = { tmdb_id: d.id };
+      for (const [key, value] of Object.entries(fresh) as Array<
+        [keyof typeof fresh, string | number | null]
+      >) {
+        if (value === null || value === "") continue;
+        const current = movie[key];
+        const empty = current === null || current === "";
+        if (replace || empty) Object.assign(set, { [key]: value });
+      }
+      if (replace || !movie.poster_url) {
+        const poster = await copyPoster(db, userId, d.poster_path, fetchImpl);
+        if (poster) set.poster_url = poster;
+      }
+      const done = await db
+        .update(movies)
+        .set(set)
+        .where(and(eq(movies.id, movie.id), isNull(movies.tmdb_id)))
+        .returning({ id: movies.id })
+        .catch((e: unknown) => {
+          // Relié en parallèle (contrainte d'unicité sur tmdb_id).
+          console.error("[tmdb] mise à jour", movie.title, e);
+          return [];
+        });
+      (done.length ? report.updated : report.failed).push(set.title ?? movie.title);
+    } catch (e) {
+      if (e instanceof AppError && e.code === "TMDB_BAD_KEY") throw e;
+      console.error("[tmdb] fiche", movie.title, e);
+      report.failed.push(movie.title);
+    }
+  }
+  return report;
 }

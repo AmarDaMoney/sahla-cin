@@ -381,6 +381,13 @@ export const en: Dict = {
       noResults: "No results",
       notConfigured:
         "To enable import, add the TMDB_API_KEY variable on Railway (free key at themoviedb.org).",
+      enrich: "Complete films from TMDB",
+      enriching: "Searching TMDB…",
+      enrichHint:
+        "For films already saved: links each film to TMDB (identical title only) and adds the missing poster, translations, running time, rating and trailer. Nothing you entered is replaced (except demo films).",
+      enriched: (n: number) => (n === 1 ? "1 film completed" : `${n} films completed`),
+      enrichNotFound: "Not found (complete by hand):",
+      enrichFailed: "Error, try again:",
     },
     demo: {
       title: "Demo data",

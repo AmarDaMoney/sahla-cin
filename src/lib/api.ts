@@ -19,7 +19,7 @@ import * as admin from "@/server/services/admin";
 import * as booking from "@/server/services/booking";
 import * as catalog from "@/server/services/catalog";
 import * as csvImport from "@/server/services/csv-import";
-import { seedDemo } from "@/server/services/demo";
+import { DEMO_MOVIE_IDS, seedDemo } from "@/server/services/demo";
 import * as media from "@/server/services/media";
 import * as tmdb from "@/server/services/tmdb";
 import { notifyBooking } from "@/server/services/notifications";
@@ -372,6 +372,12 @@ export const importTmdb = createServerFn({ method: "POST" })
   .middleware([adminOnly])
   .inputValidator(z.number().int().positive())
   .handler(async ({ data, context }) => tmdb.importTmdb(context.db, context.viewer.id, data));
+
+export const enrichFromTmdb = createServerFn({ method: "POST" })
+  .middleware([adminOnly])
+  .handler(async ({ context }) =>
+    tmdb.enrichMovies(context.db, context.viewer.id, { replaceIds: DEMO_MOVIE_IDS }),
+  );
 
 export const fetchTeam = createServerFn({ method: "GET" })
   .middleware([adminOnly])

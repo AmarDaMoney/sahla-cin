@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { CheckCheck, ImageUp, Plus, Search, Trash2, X } from "lucide-react";
+import { CheckCheck, ImageUp, Plus, Search, Sparkles, Trash2, X } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { BottomNav } from "@/components/BottomNav";
 import { MoviePoster } from "@/components/MoviePoster";
@@ -30,6 +30,7 @@ import {
   fetchCities,
   fetchMovies,
   fetchScreeningsByStatus,
+  enrichFromTmdb,
   fetchAdminOptions,
   fetchTeam,
   importTmdb,
@@ -319,6 +320,23 @@ function TmdbImport({ onImported }: { onImported: (movieId: string) => void }) {
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState<number | "search" | null>(null);
   const [results, setResults] = useState<Awaited<ReturnType<typeof searchTmdb>> | null>(null);
+  const queryClient = useQueryClient();
+  const [enriching, setEnriching] = useState(false);
+  const [report, setReport] = useState<Awaited<ReturnType<typeof enrichFromTmdb>> | null>(null);
+
+  async function enrich() {
+    setEnriching(true);
+    try {
+      const res = await enrichFromTmdb();
+      setReport(res);
+      toast.success(m.enriched(res.updated.length));
+      await queryClient.invalidateQueries();
+    } catch (err) {
+      toast.error(error(err));
+    } finally {
+      setEnriching(false);
+    }
+  }
 
   async function search(e: React.FormEvent) {
     e.preventDefault();
@@ -409,6 +427,33 @@ function TmdbImport({ onImported }: { onImported: (movieId: string) => void }) {
                 </Button>
               </div>
             ))}
+          </div>
+          <div className="mt-4 border-t border-border pt-3">
+            <p className="text-xs text-muted-foreground">{m.enrichHint}</p>
+            <Button
+              variant="outline"
+              className="mt-2 w-full rounded-xl"
+              disabled={enriching || busy !== null}
+              onClick={() => void enrich()}
+            >
+              <Sparkles className="size-4" />
+              {enriching ? m.enriching : m.enrich}
+            </Button>
+            {report && (
+              <div className="mt-2 space-y-1 text-xs" dir="auto">
+                <p>{m.enriched(report.updated.length)}</p>
+                {report.notFound.length > 0 && (
+                  <p className="text-muted-foreground">
+                    {m.enrichNotFound} {report.notFound.join(" · ")}
+                  </p>
+                )}
+                {report.failed.length > 0 && (
+                  <p className="text-destructive">
+                    {m.enrichFailed} {report.failed.join(" · ")}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </>
       )}

@@ -359,6 +359,9 @@ const MOVIES = [
   },
 ];
 
+// Films de démonstration : leur texte est inventé, TMDB peut le remplacer.
+export const DEMO_MOVIE_IDS = MOVIES.map((m) => m.id);
+
 const LANGUAGES = ["VF", "VOSTFR", "AR_DUB", "VO"] as const;
 const HOURS = [14, 17, 20];
 const DAY = 24 * 60 * 60_000;

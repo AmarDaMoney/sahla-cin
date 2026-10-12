@@ -370,6 +370,13 @@ export const fr = {
       noResults: "Aucun résultat",
       notConfigured:
         "Pour activer l'import, ajoutez la variable TMDB_API_KEY sur Railway (clé gratuite sur themoviedb.org).",
+      enrich: "Compléter les films depuis TMDB",
+      enriching: "Recherche sur TMDB…",
+      enrichHint:
+        "Pour les films déjà enregistrés : relie chaque film à TMDB (titre identique uniquement) et ajoute l'affiche, les traductions, la durée, la classification et la bande-annonce qui manquent. Rien de ce que vous avez saisi n'est remplacé (sauf les films de démonstration).",
+      enriched: (n: number) => (n <= 1 ? `${n} film complété` : `${n} films complétés`),
+      enrichNotFound: "Introuvables (à compléter à la main) :",
+      enrichFailed: "Erreur, réessayez :",
     },
     demo: {
       title: "Données de démonstration",
