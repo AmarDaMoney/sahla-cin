@@ -1,9 +1,13 @@
 // Couche paiement générique (billetterie), indépendante du domaine cinéma.
-// Aujourd'hui simulée ; brancher un PSP réel (CIB / SATIM / BaridiMob) ici
-// sans toucher au reste de l'application.
+// Le navigateur ne confirme jamais un paiement : il crée la réservation
+// (book_seats), puis demande au serveur de lancer le paiement
+// (startOnlinePayment dans payments.functions.ts). Seul le serveur, via la clé
+// service_role, appelle confirm_booking_payment.
+
+export type PaymentMethodId = "cib" | "baridimob" | "dahabia" | "espece";
 
 export type PaymentMethod = {
-  id: "cib" | "baridimob" | "dahabia" | "espece";
+  id: PaymentMethodId;
   label: string;
   hint: string;
 };
@@ -15,13 +19,8 @@ export const paymentMethods: PaymentMethod[] = [
   { id: "espece", label: "Paiement au guichet", hint: "Réservez, payez sur place" },
 ];
 
-export type PaymentResult = { ok: true; reference: string } | { ok: false; error: string };
-
-export async function processPayment(input: {
-  method: PaymentMethod["id"];
-  amount: number;
-}): Promise<PaymentResult> {
-  await new Promise((r) => setTimeout(r, 700));
-  if (input.amount <= 0) return { ok: false, error: "Montant invalide" };
-  return { ok: true, reference: "DZ-" + Math.random().toString(36).slice(2, 8).toUpperCase() };
-}
+export type PaymentStart =
+  // Paiement confirmé immédiatement (mode simulation).
+  | { status: "confirmed" }
+  // Prestataire réel : rediriger le client vers la page de paiement.
+  | { status: "redirect"; url: string };

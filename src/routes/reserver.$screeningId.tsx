@@ -9,8 +9,15 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/hooks/useAuth";
-import { createBooking, fetchScreening, fetchSeats, fetchTakenSeatIds } from "@/lib/api";
-import { paymentMethods, processPayment, type PaymentMethod } from "@/lib/payments";
+import {
+  cancelPendingBooking,
+  createBooking,
+  fetchScreening,
+  fetchSeats,
+  fetchTakenSeatIds,
+} from "@/lib/api";
+import { paymentMethods, type PaymentMethodId } from "@/lib/payments";
+import { startOnlinePayment } from "@/lib/payments.functions";
 import { t } from "@/lib/i18n";
 
 export const Route = createFileRoute("/reserver/$screeningId")({
@@ -46,7 +53,7 @@ function BookingPage() {
   const { user, loading: authLoading } = useAuth();
 
   const [selected, setSelected] = useState<string[]>([]);
-  const [method, setMethod] = useState<PaymentMethod["id"]>("cib");
+  const [method, setMethod] = useState<PaymentMethodId>("cib");
   const [submitting, setSubmitting] = useState(false);
 
   const screening = useQuery({
@@ -96,19 +103,27 @@ function BookingPage() {
       return;
     }
     setSubmitting(true);
+    let bookingId: string | null = null;
     try {
-      const payment = await processPayment({ method, amount: total });
-      if (!payment.ok) throw new Error(payment.error);
       const booking = await createBooking({
         screeningId,
         seatIds: selected,
-        totalAmount: total,
-        paid: method !== "espece",
+        paymentMethod: method,
       });
+      bookingId = booking.bookingId;
+      if (method !== "espece") {
+        const payment = await startOnlinePayment({ data: { bookingId } });
+        if (payment.status === "redirect") {
+          window.location.assign(payment.url);
+          return;
+        }
+      }
       await queryClient.invalidateQueries({ queryKey: ["taken", screeningId] });
-      toast.success(t.booking.success);
+      toast.success(method === "espece" ? t.booking.successCounter : t.booking.success);
       navigate({ to: "/tickets", search: { qr: booking.qrCode } });
     } catch (e) {
+      // Paiement échoué : on libère immédiatement les sièges.
+      if (bookingId) await cancelPendingBooking(bookingId).catch(() => {});
       toast.error(e instanceof Error ? e.message : "Erreur lors de la réservation");
       void taken.refetch();
       setSelected([]);
@@ -121,7 +136,10 @@ function BookingPage() {
     <div className="min-h-screen pb-24">
       <AppHeader
         right={
-          <Link to="/" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+          <Link
+            to="/"
+            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          >
             <ArrowLeft className="size-4" />
             {t.common.back}
           </Link>
@@ -211,7 +229,9 @@ function BookingPage() {
                 type="button"
                 onClick={() => setMethod(p.id)}
                 className={`flex w-full items-center justify-between rounded-xl border p-3 text-left transition-colors ${
-                  method === p.id ? "border-primary bg-primary/10" : "border-border bg-card hover:border-primary/40"
+                  method === p.id
+                    ? "border-primary bg-primary/10"
+                    : "border-border bg-card hover:border-primary/40"
                 }`}
               >
                 <span>

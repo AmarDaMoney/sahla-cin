@@ -18,16 +18,19 @@ export type Database = {
         Row: {
           booking_id: string
           id: string
+          screening_id: string
           seat_id: string
         }
         Insert: {
           booking_id: string
           id?: string
+          screening_id: string
           seat_id: string
         }
         Update: {
           booking_id?: string
           id?: string
+          screening_id?: string
           seat_id?: string
         }
         Relationships: [
@@ -36,6 +39,13 @@ export type Database = {
             columns: ["booking_id"]
             isOneToOne: false
             referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "booking_seats_screening_id_fkey"
+            columns: ["screening_id"]
+            isOneToOne: false
+            referencedRelation: "screenings"
             referencedColumns: ["id"]
           },
           {
@@ -49,8 +59,14 @@ export type Database = {
       }
       bookings: {
         Row: {
+          cancel_reason: string | null
+          cancelled_at: string | null
           created_at: string
+          expires_at: string | null
           id: string
+          paid_at: string | null
+          payment_method: string | null
+          payment_reference: string | null
           qr_code: string | null
           screening_id: string
           status: Database["public"]["Enums"]["booking_status"]
@@ -58,8 +74,14 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          cancel_reason?: string | null
+          cancelled_at?: string | null
           created_at?: string
+          expires_at?: string | null
           id?: string
+          paid_at?: string | null
+          payment_method?: string | null
+          payment_reference?: string | null
           qr_code?: string | null
           screening_id: string
           status?: Database["public"]["Enums"]["booking_status"]
@@ -67,8 +89,14 @@ export type Database = {
           user_id: string
         }
         Update: {
+          cancel_reason?: string | null
+          cancelled_at?: string | null
           created_at?: string
+          expires_at?: string | null
           id?: string
+          paid_at?: string | null
+          payment_method?: string | null
+          payment_reference?: string | null
           qr_code?: string | null
           screening_id?: string
           status?: Database["public"]["Enums"]["booking_status"]
@@ -456,9 +484,34 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      book_seats: {
+        Args: {
+          _payment_method: string
+          _screening_id: string
+          _seat_ids: string[]
+        }
+        Returns: {
+          booking_id: string
+          expires_at: string
+          qr_code: string
+          total_amount: number
+        }[]
+      }
+      cancel_pending_booking: {
+        Args: { _booking_id: string }
+        Returns: boolean
+      }
+      confirm_booking_payment: {
+        Args: { _amount: number; _booking_id: string; _reference: string }
+        Returns: string
+      }
       generate_seats_for_hall: {
         Args: { _hall_id: string }
         Returns: undefined
+      }
+      get_taken_seats: {
+        Args: { _screening_id: string }
+        Returns: string[]
       }
       has_role: {
         Args: {
@@ -474,6 +527,18 @@ export type Database = {
       is_staff_of_hall: {
         Args: { _hall_id: string; _user_id: string }
         Returns: boolean
+      }
+      release_expired_holds: {
+        Args: { _screening_id?: string }
+        Returns: number
+      }
+      scan_ticket: {
+        Args: { _code: string; _collect_cash?: boolean }
+        Returns: {
+          amount: number
+          info: string
+          outcome: string
+        }[]
       }
     }
     Enums: {

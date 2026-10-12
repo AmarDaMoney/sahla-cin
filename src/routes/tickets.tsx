@@ -61,6 +61,8 @@ type TicketRow = {
   booking: {
     total_amount: number;
     status: string;
+    payment_method: string | null;
+    expires_at: string | null;
     booking_seats: { seat: { row_label: string; seat_number: number } | null }[];
     screening: {
       starts_at: string;
@@ -77,6 +79,27 @@ function seatLabels(tk: TicketRow) {
     .filter(Boolean)
     .join(", ");
 }
+
+type TicketState = "valid" | "counter" | "cancelled" | "scanned" | "past";
+
+function ticketState(tk: TicketRow, now: number): TicketState {
+  const b = tk.booking;
+  const expired =
+    b?.status === "en_attente_paiement" && !!b.expires_at && new Date(b.expires_at).getTime() < now;
+  if (!b || b.status === "annule" || expired) return "cancelled";
+  if (tk.scanned) return "scanned";
+  const start = b.screening?.starts_at;
+  if (!start || new Date(start).getTime() < now) return "past";
+  return b.status === "en_attente_paiement" ? "counter" : "valid";
+}
+
+const stateLabel: Record<TicketState, string> = {
+  valid: t.tickets.valid,
+  counter: t.tickets.payAtCounter,
+  cancelled: t.tickets.cancelled,
+  scanned: t.tickets.scanned,
+  past: t.tickets.past,
+};
 
 function TicketsPage() {
   const { qr } = Route.useSearch();
@@ -96,9 +119,8 @@ function TicketsPage() {
     const up: TicketRow[] = [];
     const past: TicketRow[] = [];
     rows.forEach((tk) => {
-      const start = tk.booking?.screening?.starts_at;
-      const isPast = !start || new Date(start).getTime() < now;
-      (isPast ? past : up).push(tk);
+      const state = ticketState(tk, now);
+      (state === "valid" || state === "counter" ? up : past).push(tk);
     });
     up.sort(
       (a, b) =>
@@ -163,7 +185,7 @@ function TicketsPage() {
                 </p>
               )}
               {history.map((tk) => (
-                <TicketItem key={tk.id} tk={tk} past onOpen={() => setOpenQr(tk.qr_code)} />
+                <TicketItem key={tk.id} tk={tk} onOpen={() => setOpenQr(tk.qr_code)} />
               ))}
             </TabsContent>
           </Tabs>
@@ -204,17 +226,10 @@ function TicketsPage() {
   );
 }
 
-function TicketItem({
-  tk,
-  past,
-  onOpen,
-}: {
-  tk: TicketRow;
-  past?: boolean;
-  onOpen: () => void;
-}) {
+function TicketItem({ tk, onOpen }: { tk: TicketRow; onOpen: () => void }) {
   const s = tk.booking?.screening;
   const seats = seatLabels(tk);
+  const state = ticketState(tk, Date.now());
   return (
     <article className="rounded-2xl border border-border bg-card p-4">
       <div className="flex items-start justify-between gap-3">
@@ -223,10 +238,22 @@ function TicketItem({
           <p className="truncate text-xs text-muted-foreground">
             {s?.hall.cinema.name} · {s?.hall.name}
           </p>
-          {s && <p className="text-xs text-muted-foreground">{fmt.format(new Date(s.starts_at))}</p>}
+          {s && (
+            <p className="text-xs text-muted-foreground">{fmt.format(new Date(s.starts_at))}</p>
+          )}
         </div>
-        <Badge variant={tk.scanned ? "secondary" : past ? "outline" : "default"}>
-          {tk.scanned ? t.tickets.scanned : past ? t.tickets.past : t.tickets.valid}
+        <Badge
+          variant={
+            state === "valid"
+              ? "default"
+              : state === "cancelled"
+                ? "destructive"
+                : state === "counter" || state === "scanned"
+                  ? "secondary"
+                  : "outline"
+          }
+        >
+          {stateLabel[state]}
         </Badge>
       </div>
 
@@ -237,10 +264,12 @@ function TicketItem({
             {tk.booking?.total_amount} {t.common.da}
           </span>
         </span>
-        <Button size="sm" variant="outline" className="shrink-0 rounded-xl" onClick={onOpen}>
-          <QrCode className="size-4 text-primary" />
-          {t.tickets.view}
-        </Button>
+        {state !== "cancelled" && (
+          <Button size="sm" variant="outline" className="shrink-0 rounded-xl" onClick={onOpen}>
+            <QrCode className="size-4 text-primary" />
+            {t.tickets.view}
+          </Button>
+        )}
       </div>
     </article>
   );

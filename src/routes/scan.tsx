@@ -1,12 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { CheckCircle2, XCircle, AlertTriangle, Camera } from "lucide-react";
+import { CheckCircle2, XCircle, AlertTriangle, Camera, Banknote } from "lucide-react";
+import { toast } from "sonner";
 import { AppHeader } from "@/components/AppHeader";
 import { BottomNav } from "@/components/BottomNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
-import { scanTicket, type ScanOutcome } from "@/lib/api";
+import { scanTicket, type ScanResult } from "@/lib/api";
 import { t } from "@/lib/i18n";
 
 export const Route = createFileRoute("/scan")({
@@ -15,7 +16,8 @@ export const Route = createFileRoute("/scan")({
       { title: "Contrôle des billets — BookCinéDZ" },
       {
         name: "description",
-        content: "Mode agent guichet : scannez les QR codes des billets et refusez les billets déjà utilisés.",
+        content:
+          "Mode agent guichet : scannez les QR codes des billets et refusez les billets déjà utilisés.",
       },
       { property: "og:title", content: "Contrôle des billets — BookCinéDZ" },
       { property: "og:description", content: "Scanner de billets pour les agents de guichet." },
@@ -27,12 +29,11 @@ export const Route = createFileRoute("/scan")({
   component: ScanPage,
 });
 
-type Result = { outcome: ScanOutcome; info?: string } | null;
-
 function ScanPage() {
   const { isAgent, loading } = useAuth();
   const [code, setCode] = useState("");
-  const [result, setResult] = useState<Result>(null);
+  const [result, setResult] = useState<ScanResult | null>(null);
+  const [lastCode, setLastCode] = useState("");
   const [scanning, setScanning] = useState(false);
   const scannerRef = useRef<{ stop: () => Promise<void>; clear: () => void } | null>(null);
   const busyRef = useRef(false);
@@ -41,11 +42,21 @@ function ScanPage() {
     if (!value.trim() || busyRef.current) return;
     busyRef.current = true;
     try {
+      setLastCode(value);
       setResult(await scanTicket(value));
-    } catch {
-      setResult({ outcome: "invalid" });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erreur de contrôle");
+      setResult(null);
     } finally {
       setTimeout(() => (busyRef.current = false), 1200);
+    }
+  }
+
+  async function collectCash() {
+    try {
+      setResult(await scanTicket(lastCode, true));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erreur d'encaissement");
     }
   }
 
@@ -134,32 +145,34 @@ function ScanPage() {
 
         {result && (
           <div
-            className={`mt-5 flex items-center gap-3 rounded-2xl border p-4 ${
+            className={`mt-5 rounded-2xl border p-4 ${
               result.outcome === "ok"
                 ? "border-primary bg-primary/15"
-                : result.outcome === "used"
-                  ? "border-primary bg-primary/15"
+                : result.outcome === "unpaid" || result.outcome === "used"
+                  ? "border-amber-500 bg-amber-500/15"
                   : "border-destructive bg-destructive/15"
             }`}
             role="status"
           >
-            {result.outcome === "ok" ? (
-              <CheckCircle2 className="size-6 text-primary" />
-            ) : result.outcome === "used" ? (
-              <AlertTriangle className="size-6 text-primary" />
-            ) : (
-              <XCircle className="size-6 text-destructive" />
-            )}
-            <div>
-              <p className="font-semibold">
-                {result.outcome === "ok"
-                  ? t.scan.ok
-                  : result.outcome === "used"
-                    ? t.scan.used
-                    : t.scan.invalid}
-              </p>
-              {result.info && <p className="text-xs text-muted-foreground">{result.info}</p>}
+            <div className="flex items-center gap-3">
+              {result.outcome === "ok" ? (
+                <CheckCircle2 className="size-6 text-primary" />
+              ) : result.outcome === "unpaid" || result.outcome === "used" ? (
+                <AlertTriangle className="size-6 text-amber-500" />
+              ) : (
+                <XCircle className="size-6 text-destructive" />
+              )}
+              <div>
+                <p className="font-semibold">{t.scan[result.outcome]}</p>
+                {result.info && <p className="text-xs text-muted-foreground">{result.info}</p>}
+              </div>
             </div>
+            {result.outcome === "unpaid" && (
+              <Button className="mt-3 w-full rounded-xl" onClick={() => void collectCash()}>
+                <Banknote className="size-4" />
+                {t.scan.collect} — {result.amount} {t.common.da}
+              </Button>
+            )}
           </div>
         )}
       </main>

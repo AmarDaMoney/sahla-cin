@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
+import type { PaymentMethodId } from "@/lib/payments";
 
 export type AppRole = Database["public"]["Enums"]["app_role"];
 export type AudioLanguage = Database["public"]["Enums"]["audio_language"];
@@ -109,65 +110,44 @@ export async function fetchSeats(hallId: string) {
   );
 }
 
-export async function fetchTakenSeatIds(screeningId: string) {
-  const bookings = req(
-    await supabase
-      .from("bookings")
-      .select("id")
-      .eq("screening_id", screeningId)
-      .neq("status", "annule"),
-  );
-  if (!bookings.length) return [] as string[];
-  const rows = req(
-    await supabase
-      .from("booking_seats")
-      .select("seat_id")
-      .in(
-        "booking_id",
-        bookings.map((b) => b.id),
-      ),
-  );
-  return rows.map((r) => r.seat_id);
+// Les fonctions SQL renvoient un code (ex. SEATS_TAKEN) et un message lisible
+// dans « hint ».
+function rpcError(error: { message: string; hint?: string | null }) {
+  return new Error(error.hint || error.message);
 }
 
+export async function fetchTakenSeatIds(screeningId: string) {
+  const { data, error } = await supabase.rpc("get_taken_seats", { _screening_id: screeningId });
+  if (error) throw rpcError(error);
+  return data ?? [];
+}
+
+// Réservation atomique côté serveur : prix, statut et QR code sont fixés par
+// la base. La réservation reste « en_attente_paiement » jusqu'au paiement.
 export async function createBooking(input: {
   screeningId: string;
   seatIds: string[];
-  totalAmount: number;
-  paid: boolean;
+  paymentMethod: PaymentMethodId;
 }) {
-  const { data: userData } = await supabase.auth.getUser();
-  const userId = userData.user?.id;
-  if (!userId) throw new Error("Connexion requise");
+  const { data, error } = await supabase.rpc("book_seats", {
+    _screening_id: input.screeningId,
+    _seat_ids: input.seatIds,
+    _payment_method: input.paymentMethod,
+  });
+  if (error) throw rpcError(error);
+  const row = data?.[0];
+  if (!row) throw new Error("Réservation impossible");
+  return {
+    bookingId: row.booking_id,
+    qrCode: row.qr_code,
+    totalAmount: row.total_amount,
+    expiresAt: row.expires_at,
+  };
+}
 
-  const booking = req(
-    await supabase
-      .from("bookings")
-      .insert({
-        screening_id: input.screeningId,
-        user_id: userId,
-        total_amount: input.totalAmount,
-        status: input.paid ? "confirme" : "en_attente_paiement",
-      })
-      .select("id")
-      .single(),
-  );
-
-  const seatsRes = await supabase
-    .from("booking_seats")
-    .insert(input.seatIds.map((seat_id) => ({ booking_id: booking.id, seat_id })));
-  if (seatsRes.error) {
-    await supabase.from("bookings").update({ status: "annule" }).eq("id", booking.id);
-    throw new Error("Ces sièges viennent d'être réservés. Choisissez-en d'autres.");
-  }
-
-  const qr = `BCDZ-${booking.id.slice(0, 8).toUpperCase()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-  req(
-    await supabase.from("tickets").insert({ booking_id: booking.id, qr_code: qr }).select("id").single(),
-  );
-  await supabase.from("bookings").update({ qr_code: qr }).eq("id", booking.id);
-
-  return { bookingId: booking.id, qrCode: qr };
+export async function cancelPendingBooking(bookingId: string) {
+  const { error } = await supabase.rpc("cancel_pending_booking", { _booking_id: bookingId });
+  if (error) throw rpcError(error);
 }
 
 export async function fetchMyTickets() {
@@ -176,7 +156,7 @@ export async function fetchMyTickets() {
       .from("tickets")
       .select(
         `id, qr_code, scanned, scanned_at, created_at,
-         booking:bookings(id, status, total_amount,
+         booking:bookings(id, status, total_amount, payment_method, expires_at,
            booking_seats(seat:seats(row_label, seat_number)),
            screening:screenings(${SCREENING_SELECT}))`,
       )
@@ -184,54 +164,31 @@ export async function fetchMyTickets() {
   );
 }
 
-export type ScanOutcome = "ok" | "used" | "invalid";
+export type ScanOutcome =
+  "ok" | "used" | "invalid" | "unpaid" | "cancelled" | "wrong_cinema" | "too_early" | "expired";
 
-export async function scanTicket(code: string): Promise<{ outcome: ScanOutcome; info?: string }> {
-  type ScanRow = {
-    id: string;
-    scanned: boolean;
-    booking: {
-      screening: { movie: { title: string } | null; hall: { name: string } | null } | null;
-    } | null;
-  };
+export type ScanResult = { outcome: ScanOutcome; info: string | null; amount: number | null };
 
-  const ticket = unwrap(
-    await supabase
-      .from("tickets")
-      .select("id, scanned, booking:bookings(screening:screenings(starts_at, movie:movies(title), hall:halls(name)))")
-      .eq("qr_code", code.trim())
-      .maybeSingle(),
-  ) as unknown as ScanRow | null;
-
-  if (!ticket) return { outcome: "invalid" };
-  if (ticket.scanned) return { outcome: "used" };
-
-  const { data: userData } = await supabase.auth.getUser();
-  const res = await supabase
-    .from("tickets")
-    .update({
-      scanned: true,
-      scanned_at: new Date().toISOString(),
-      scanned_by: userData.user?.id ?? null,
-    })
-    .eq("id", ticket.id)
-    .eq("scanned", false)
-    .select("id");
-  if (res.error) throw new Error(res.error.message);
-  if (!res.data?.length) return { outcome: "used" };
-
-  const screening = ticket.booking?.screening;
-  const info = screening?.movie && screening.hall
-    ? `${screening.movie.title} — ${screening.hall.name}`
-    : null;
-  return info ? { outcome: "ok", info } : { outcome: "ok" };
+// Contrôle côté serveur : paiement, annulation, cinéma de l'agent et horaire.
+// collectCash = true : l'agent encaisse une réservation « paiement au guichet ».
+export async function scanTicket(code: string, collectCash = false): Promise<ScanResult> {
+  const { data, error } = await supabase.rpc("scan_ticket", {
+    _code: code.trim(),
+    _collect_cash: collectCash,
+  });
+  if (error) throw rpcError(error);
+  const row = data?.[0];
+  if (!row) return { outcome: "invalid", info: null, amount: null };
+  return { outcome: row.outcome as ScanOutcome, info: row.info, amount: row.amount };
 }
 
 /* --- Contributeur / Admin --- */
 
 export async function fetchMyStaffCinemas() {
   return req(
-    await supabase.from("cinema_staff").select("cinema:cinemas(id, name, halls(id, name, capacity))"),
+    await supabase
+      .from("cinema_staff")
+      .select("cinema:cinemas(id, name, halls(id, name, capacity))"),
   );
 }
 
@@ -283,7 +240,11 @@ export async function deleteScreening(id: string) {
 
 export async function fetchScreeningsByStatus(status: PublishStatus) {
   return req(
-    await supabase.from("screenings").select(SCREENING_SELECT).eq("status", status).order("starts_at"),
+    await supabase
+      .from("screenings")
+      .select(SCREENING_SELECT)
+      .eq("status", status)
+      .order("starts_at"),
   ) as unknown as ScreeningFull[];
 }
 
