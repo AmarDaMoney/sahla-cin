@@ -2,6 +2,7 @@
 import { eq } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { bookings, user } from "../db/schema";
+import { appUrl } from "../config";
 import { actionEmail, sendEmail } from "../email";
 
 const when = new Intl.DateTimeFormat("fr-FR", {
@@ -41,7 +42,7 @@ export async function sendBookingEmail(db: Db, bookingId: string) {
       subject: paid ? "Votre billet BookCinéDZ" : "Votre réservation BookCinéDZ",
       intro,
       action: "Voir mon billet",
-      url: `${process.env["BETTER_AUTH_URL"] ?? ""}/tickets`,
+      url: `${appUrl() ?? ""}/tickets`,
     }),
   );
 }

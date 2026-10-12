@@ -1,6 +1,6 @@
 // Envoi d'e-mails via l'API HTTP de Resend (Railway bloque le SMTP sortant
 // sur certaines offres ; une API HTTP fonctionne partout).
-// Sans RESEND_API_KEY : en développement, le lien est affiché dans la console.
+// Sans RESEND_API_KEY : le contenu de l'e-mail est écrit dans les logs.
 
 type Email = { to: string; subject: string; html: string; text: string };
 
@@ -9,11 +9,12 @@ export async function sendEmail(email: Email): Promise<void> {
   const from = process.env["EMAIL_FROM"] ?? "BookCinéDZ <onboarding@resend.dev>";
 
   if (!apiKey) {
-    if (process.env["NODE_ENV"] === "production") {
-      console.error(`[email] RESEND_API_KEY manquant — e-mail non envoyé à ${email.to}`);
-      return;
-    }
-    console.info(`[email] (dev) À: ${email.to}\nSujet: ${email.subject}\n${email.text}`);
+    // Pas encore de service d'e-mail : le message (et son lien) est écrit dans
+    // les logs, visibles uniquement par les membres du projet Railway. Pratique
+    // pour démarrer ; à remplacer par Resend avant d'ouvrir au public.
+    console.info(
+      `[email] RESEND_API_KEY absent — e-mail NON envoyé, contenu ci-dessous.\nÀ: ${email.to}\nSujet: ${email.subject}\n${email.text}`,
+    );
     return;
   }
 

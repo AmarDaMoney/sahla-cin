@@ -3,13 +3,16 @@
 // par requireUser ou requireRole.
 import { createMiddleware } from "@tanstack/react-start";
 import { getRequestHeaders } from "@tanstack/react-start/server";
-import { getAuth } from "@/server/auth";
+import { authConfigured, getAuth } from "@/server/auth";
 import { getDb } from "@/server/db/client";
 import { AppError } from "@/lib/errors";
 import { getViewer, type AppRole } from "@/server/viewer";
 
 export const withViewer = createMiddleware({ type: "function" }).server(async ({ next }) => {
-  const viewer = await getViewer(getDb(), getAuth(), new Headers(getRequestHeaders()));
+  // Connexion non configurée : les pages publiques restent accessibles.
+  const viewer = authConfigured()
+    ? await getViewer(getDb(), getAuth(), new Headers(getRequestHeaders()))
+    : null;
   return next({ context: { viewer, db: getDb() } });
 });
 

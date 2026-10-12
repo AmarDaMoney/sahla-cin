@@ -18,6 +18,7 @@ import { Route as ContributeurRouteImport } from './routes/contributeur'
 import { Route as ReinitialiserRouteImport } from './routes/reinitialiser'
 import { Route as ScanRouteImport } from './routes/scan'
 import { Route as TicketsRouteImport } from './routes/tickets'
+import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as CinemaCinemaIdRouteImport } from './routes/cinema.$cinemaId'
 import { Route as FilmMovieIdRouteImport } from './routes/film.$movieId'
 import { Route as ReserverScreeningIdRouteImport } from './routes/reserver.$screeningId'
@@ -68,6 +69,11 @@ const TicketsRoute = TicketsRouteImport.update({
   path: '/tickets',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiHealthRoute = ApiHealthRouteImport.update({
+  id: '/api/health',
+  path: '/api/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CinemaCinemaIdRoute = CinemaCinemaIdRouteImport.update({
   id: '/cinema/$cinemaId',
   path: '/cinema/$cinemaId',
@@ -99,6 +105,7 @@ export interface FileRoutesByFullPath {
   '/reinitialiser': typeof ReinitialiserRoute
   '/scan': typeof ScanRoute
   '/tickets': typeof TicketsRoute
+  '/api/health': typeof ApiHealthRoute
   '/cinema/$cinemaId': typeof CinemaCinemaIdRoute
   '/film/$movieId': typeof FilmMovieIdRoute
   '/reserver/$screeningId': typeof ReserverScreeningIdRoute
@@ -114,6 +121,7 @@ export interface FileRoutesByTo {
   '/reinitialiser': typeof ReinitialiserRoute
   '/scan': typeof ScanRoute
   '/tickets': typeof TicketsRoute
+  '/api/health': typeof ApiHealthRoute
   '/cinema/$cinemaId': typeof CinemaCinemaIdRoute
   '/film/$movieId': typeof FilmMovieIdRoute
   '/reserver/$screeningId': typeof ReserverScreeningIdRoute
@@ -130,6 +138,7 @@ export interface FileRoutesById {
   '/reinitialiser': typeof ReinitialiserRoute
   '/scan': typeof ScanRoute
   '/tickets': typeof TicketsRoute
+  '/api/health': typeof ApiHealthRoute
   '/cinema/$cinemaId': typeof CinemaCinemaIdRoute
   '/film/$movieId': typeof FilmMovieIdRoute
   '/reserver/$screeningId': typeof ReserverScreeningIdRoute
@@ -147,6 +156,7 @@ export interface FileRouteTypes {
     | '/reinitialiser'
     | '/scan'
     | '/tickets'
+    | '/api/health'
     | '/cinema/$cinemaId'
     | '/film/$movieId'
     | '/reserver/$screeningId'
@@ -162,6 +172,7 @@ export interface FileRouteTypes {
     | '/reinitialiser'
     | '/scan'
     | '/tickets'
+    | '/api/health'
     | '/cinema/$cinemaId'
     | '/film/$movieId'
     | '/reserver/$screeningId'
@@ -177,6 +188,7 @@ export interface FileRouteTypes {
     | '/reinitialiser'
     | '/scan'
     | '/tickets'
+    | '/api/health'
     | '/cinema/$cinemaId'
     | '/film/$movieId'
     | '/reserver/$screeningId'
@@ -193,6 +205,7 @@ export interface RootRouteChildren {
   ReinitialiserRoute: typeof ReinitialiserRoute
   ScanRoute: typeof ScanRoute
   TicketsRoute: typeof TicketsRoute
+  ApiHealthRoute: typeof ApiHealthRoute
   CinemaCinemaIdRoute: typeof CinemaCinemaIdRoute
   FilmMovieIdRoute: typeof FilmMovieIdRoute
   ReserverScreeningIdRoute: typeof ReserverScreeningIdRoute
@@ -264,6 +277,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TicketsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/health': {
+      id: '/api/health'
+      path: '/api/health'
+      fullPath: '/api/health'
+      preLoaderRoute: typeof ApiHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/cinema/$cinemaId': {
       id: '/cinema/$cinemaId'
       path: '/cinema/$cinemaId'
@@ -305,6 +325,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReinitialiserRoute: ReinitialiserRoute,
   ScanRoute: ScanRoute,
   TicketsRoute: TicketsRoute,
+  ApiHealthRoute: ApiHealthRoute,
   CinemaCinemaIdRoute: CinemaCinemaIdRoute,
   FilmMovieIdRoute: FilmMovieIdRoute,
   ReserverScreeningIdRoute: ReserverScreeningIdRoute,

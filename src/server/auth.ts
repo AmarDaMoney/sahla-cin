@@ -3,13 +3,15 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import type { Db } from "./db/client";
 import { getDb } from "./db/client";
 import * as schema from "./db/schema";
+import { AppError } from "@/lib/errors";
+import { appUrl } from "./config";
 import { actionEmail, sendEmail } from "./email";
 
 // Authentification : e-mail + mot de passe (adresse vérifiée obligatoire),
 // réinitialisation du mot de passe, Google (si configuré). Les sessions sont
 // stockées en base, dans un cookie httpOnly.
 export function createAuth(db: Db) {
-  const baseURL = process.env["BETTER_AUTH_URL"];
+  const baseURL = appUrl();
   const googleId = process.env["GOOGLE_CLIENT_ID"];
   const googleSecret = process.env["GOOGLE_CLIENT_SECRET"];
 
@@ -90,9 +92,22 @@ export function createAuth(db: Db) {
 
 export type Auth = ReturnType<typeof createAuth>;
 
+// Sans secret solide, Better Auth utiliserait un secret par défaut connu de
+// tous (sessions falsifiables) : on refuse alors toute connexion.
+export function authConfigured(): boolean {
+  const secret = process.env["BETTER_AUTH_SECRET"]?.trim() ?? "";
+  return secret.length >= 32 && !!appUrl();
+}
+
 let auth: Auth | undefined;
 
 export function getAuth(): Auth {
+  if (!authConfigured()) {
+    throw new AppError(
+      "AUTH_NOT_CONFIGURED",
+      "Connexion indisponible : configuration incomplète (voir /api/health).",
+    );
+  }
   auth ??= createAuth(getDb());
   return auth;
 }

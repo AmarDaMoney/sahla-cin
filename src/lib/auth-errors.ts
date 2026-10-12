@@ -9,6 +9,8 @@ const messages: Record<string, string> = {
   PASSWORD_TOO_LONG: "Mot de passe trop long.",
   EMAIL_NOT_VERIFIED: "Adresse e-mail non confirmée. Vérifiez votre boîte mail.",
   INVALID_TOKEN: "Lien invalide ou expiré.",
+  AUTH_NOT_CONFIGURED:
+    "Connexion indisponible : l'installation n'est pas terminée (ouvrez /api/health).",
 };
 
 export function authErrorMessage(error: {
@@ -17,5 +19,8 @@ export function authErrorMessage(error: {
   message?: string | undefined;
 }) {
   if (error.status === 429) return "Trop de tentatives. Réessayez dans quelques minutes.";
-  return (error.code && messages[error.code]) || "Une erreur est survenue. Réessayez.";
+  if (error.code && messages[error.code]) return messages[error.code]!;
+  // Le code aide à diagnostiquer (voir aussi /api/health).
+  const detail = error.code ?? (error.status ? `HTTP ${error.status}` : null);
+  return `Une erreur est survenue${detail ? ` (${detail})` : ""}. Réessayez.`;
 }
