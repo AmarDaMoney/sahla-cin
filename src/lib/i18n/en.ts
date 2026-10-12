@@ -172,7 +172,8 @@ export const en: Dict = {
     sendLink: "Send link",
     linkSent: "If an account exists for this address, an email has just been sent.",
     backToLogin: "Back to sign in",
-    checkInbox: "Account created — confirm your address with the link we emailed you.",
+    checkInbox:
+      "Check your inbox (and spam folder): the link to confirm your address is waiting there.",
     notVerified: "Email address not confirmed.",
     resend: "Resend confirmation email",
     resent: "Confirmation email sent again.",

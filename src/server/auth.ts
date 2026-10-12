@@ -1,4 +1,5 @@
 import { betterAuth } from "better-auth";
+import { createEmailVerificationToken } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import type { Db } from "./db/client";
 import { getDb } from "./db/client";
@@ -44,6 +45,40 @@ export function createAuth(db: Db) {
       minPasswordLength: 8,
       maxPasswordLength: 128,
       revokeSessionsOnPasswordReset: true,
+      // Inscription avec une adresse déjà enregistrée : Better Auth répond
+      // comme pour un nouveau compte (pour ne pas révéler qui est inscrit),
+      // donc c'est l'e-mail qui explique la situation à la personne.
+      onExistingUserSignUp: async ({ user }, request) => {
+        const lang = request ? langFromHeaders(request.headers) : DEFAULT_LANG;
+        const secret = authSecret();
+        if (!user.emailVerified && secret) {
+          // Jamais confirmé : on renvoie le lien de confirmation.
+          const token = await createEmailVerificationToken(secret, user.email);
+          const t = EMAIL_TEXTS[lang].verify;
+          await sendEmail(
+            actionEmail({
+              to: user.email,
+              subject: t.subject,
+              intro: t.intro(user.name),
+              action: t.action,
+              url: `${baseURL}/api/auth/verify-email?token=${token}&callbackURL=%2F`,
+              lang,
+            }),
+          );
+          return;
+        }
+        const t = EMAIL_TEXTS[lang].existing;
+        await sendEmail(
+          actionEmail({
+            to: user.email,
+            subject: t.subject,
+            intro: t.intro,
+            action: t.action,
+            url: `${baseURL}/auth`,
+            lang,
+          }),
+        );
+      },
       sendResetPassword: async ({ user, url }, request) => {
         const lang = request ? langFromHeaders(request.headers) : DEFAULT_LANG;
         const t = EMAIL_TEXTS[lang].reset;

@@ -10,6 +10,12 @@ export const EMAIL_TEXTS = {
         `Bienvenue ${name} ! Confirmez votre adresse pour activer votre compte BookCinéDZ.`,
       action: "Confirmer mon adresse",
     },
+    existing: {
+      subject: "Vous avez déjà un compte BookCinéDZ",
+      intro:
+        "Quelqu'un (sans doute vous) a voulu créer un compte avec cette adresse, mais vous en avez déjà un. Connectez-vous ; si vous avez oublié votre mot de passe, choisissez « Mot de passe oublié ? » sur la page de connexion.",
+      action: "Se connecter",
+    },
     reset: {
       subject: "Réinitialisation de votre mot de passe",
       intro: "Vous avez demandé à changer le mot de passe de votre compte BookCinéDZ.",
@@ -34,6 +40,12 @@ export const EMAIL_TEXTS = {
       subject: "أكّد عنوان بريدك الإلكتروني",
       intro: (name: string) => `مرحباً ${name}! أكّد عنوانك لتفعيل حسابك في BookCinéDZ.`,
       action: "تأكيد عنواني",
+    },
+    existing: {
+      subject: "لديك حساب BookCinéDZ بالفعل",
+      intro:
+        "حاول أحدهم (ربما أنت) إنشاء حساب بهذا العنوان، لكن لديك حساباً بالفعل. سجّل الدخول؛ وإن نسيت كلمة المرور فاختر «نسيت كلمة المرور؟» في صفحة الدخول.",
+      action: "تسجيل الدخول",
     },
     reset: {
       subject: "إعادة تعيين كلمة المرور",
@@ -60,6 +72,12 @@ export const EMAIL_TEXTS = {
       intro: (name: string) =>
         `Welcome ${name}! Confirm your address to activate your BookCinéDZ account.`,
       action: "Confirm my address",
+    },
+    existing: {
+      subject: "You already have a BookCinéDZ account",
+      intro:
+        "Someone (probably you) tried to create an account with this address, but you already have one. Sign in; if you forgot your password, choose “Forgot password?” on the sign-in page.",
+      action: "Sign in",
     },
     reset: {
       subject: "Reset your password",

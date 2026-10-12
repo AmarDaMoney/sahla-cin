@@ -111,3 +111,38 @@ describe("email links", () => {
     ).rejects.toBeTruthy();
   });
 });
+
+describe("sign-up with an address already registered", () => {
+  const subjects = () =>
+    vi
+      .mocked(console.info)
+      .mock.calls.map((c) => String(c[0]).match(/Sujet: (.*)/)?.[1])
+      .filter(Boolean);
+
+  it("tells a confirmed account holder by email, without revealing it on screen", async () => {
+    await signUpAndSignIn("taken@example.com", true);
+    vi.mocked(console.info).mockClear();
+    const res = await auth.api.signUpEmail({
+      body: { email: "taken@example.com", password: "autre-mot-de-passe", name: "X" },
+    });
+    expect(res).toMatchObject({ token: null });
+    expect(subjects()).toEqual(["Vous avez déjà un compte BookCinéDZ"]);
+  });
+
+  it("sends the confirmation link again to an unconfirmed account", async () => {
+    await auth.api.signUpEmail({
+      body: { email: "pending@example.com", password: "motdepasse-solide", name: "P" },
+    });
+    vi.mocked(console.info).mockClear();
+    await auth.api.signUpEmail({
+      body: { email: "pending@example.com", password: "motdepasse-solide", name: "P" },
+    });
+    expect(subjects()).toEqual(["Confirmez votre adresse e-mail"]);
+    const text = String(vi.mocked(console.info).mock.calls[0]![0]);
+    const link = text.match(/http:\/\/localhost:8080\/api\/auth\/verify-email\?token=[^\s]+/)![0];
+    const res = await auth.handler(new Request(link));
+    expect(res.status).toBeLessThan(400);
+    const [u] = await db.select().from(user).where(eq(user.email, "pending@example.com"));
+    expect(u!.emailVerified).toBe(true);
+  });
+});

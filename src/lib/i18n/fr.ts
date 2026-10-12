@@ -179,7 +179,8 @@ export const fr = {
     sendLink: "Envoyer le lien",
     linkSent: "Si un compte existe pour cette adresse, un e-mail vient d'être envoyé.",
     backToLogin: "Retour à la connexion",
-    checkInbox: "Compte créé — confirmez votre adresse via le lien reçu par e-mail.",
+    checkInbox:
+      "Vérifiez votre boîte e-mail (et les indésirables) : le lien pour confirmer votre adresse vous y attend.",
     notVerified: "Adresse e-mail non confirmée.",
     resend: "Renvoyer l'e-mail de confirmation",
     resent: "E-mail de confirmation renvoyé.",
