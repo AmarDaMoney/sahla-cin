@@ -41,11 +41,7 @@ database. Emails go through **Resend**.
    `ok` (it never shows secret values).
 5. **Deploy.** Railway builds with `railway.json`; on every start the database
    migrations run first (`scripts/migrate.mjs`), then the server.
-6. **Demo data (optional).** On your computer, with the Postgres _public_ URL
-   from Railway (Postgres service → _Connect_):
-   `DATABASE_URL="postgres://…" bun run db:seed`. It adds 3 cities, 7 cinemas,
-   11 films and a week of showings. Safe to run twice.
-7. **Become admin.** Sign up in the app with the address in `ADMIN_EMAILS` and
+6. **Become admin.** Sign up in the app with the address in `ADMIN_EMAILS` and
    click the confirmation link. You now see _Espace admin_ in _Compte_.
 
 Every push to `main` redeploys automatically.

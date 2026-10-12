@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import type { Db } from "@/server/db/client";
-import { bookings, cinema_staff, screenings } from "@/server/db/schema";
+import { bookings, cinema_staff, cinemas, screenings } from "@/server/db/schema";
 import { grantRole, listTeam, revokeRole, seatLayout } from "@/server/services/admin";
 import { bookSeats, cancelPendingBooking, confirmPayment } from "@/server/services/booking";
 import {
@@ -181,5 +181,18 @@ describe("admin", () => {
     await revokeRole(db, { userId: u.id, role: "agent_guichet" });
     expect(await listTeam(db)).toEqual([]);
     expect(await db.select().from(cinema_staff)).toEqual([]);
+  });
+});
+
+describe("seedDemo", () => {
+  it("loads demo data once and is safe to run again", async () => {
+    const { seedDemo } = await import("@/server/services/demo");
+    const fresh = await createTestDb();
+    const first = await seedDemo(fresh);
+    expect(first.screeningsAdded).toBeGreaterThan(70);
+    expect(await fresh.select().from(cinemas)).toHaveLength(7);
+    expect(await fresh.query.seats.findMany()).toHaveLength(1110);
+    expect((await seedDemo(fresh)).screeningsAdded).toBe(0);
+    expect(await fresh.select().from(cinemas)).toHaveLength(7);
   });
 });

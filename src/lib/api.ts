@@ -16,6 +16,7 @@ import { serialize, type Serialized } from "@/server/serialize";
 import * as admin from "@/server/services/admin";
 import * as booking from "@/server/services/booking";
 import * as catalog from "@/server/services/catalog";
+import { seedDemo } from "@/server/services/demo";
 import { notifyBooking } from "@/server/services/notifications";
 import * as programme from "@/server/services/programme";
 import { scanTicket as scan } from "@/server/services/scan";
@@ -230,6 +231,10 @@ export const deleteScreening = createServerFn({ method: "POST" })
 /* ------------------------------------------------------- Administration */
 
 const adminOnly = requireRole("admin");
+
+export const loadDemoData = createServerFn({ method: "POST" })
+  .middleware([adminOnly])
+  .handler(async ({ context }) => seedDemo(context.db));
 
 export const fetchScreeningsByStatus = createServerFn({ method: "GET" })
   .middleware([adminOnly])

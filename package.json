@@ -18,7 +18,7 @@
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node scripts/migrate.mjs",
-    "db:seed": "node scripts/seed.mjs",
+    "db:seed": "bun scripts/seed.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {

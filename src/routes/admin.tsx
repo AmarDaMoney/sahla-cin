@@ -30,6 +30,7 @@ import {
   fetchMovies,
   fetchScreeningsByStatus,
   fetchTeam,
+  loadDemoData,
   removeStaff,
   revokeRole,
   setScreeningStatus,
@@ -479,8 +480,33 @@ function VenuesTab() {
     }
   }
 
+  async function loadDemo() {
+    if (!window.confirm("Ajouter 3 villes, 7 cinémas, 11 films et une semaine de séances ?"))
+      return;
+    const ok = await run(async () => {
+      const { screeningsAdded } = await loadDemoData();
+      toast.info(`${screeningsAdded} séances ajoutées`);
+    }, "Données de démonstration chargées");
+    if (ok) await queryClient.invalidateQueries();
+  }
+
   return (
     <div className="space-y-4">
+      <div className="rounded-2xl border border-dashed border-border bg-card p-4">
+        <SectionTitle>Données de démonstration</SectionTitle>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Villes, cinémas (Alger, Oran, Constantine), films et une semaine de séances pour tester
+          l'application. Sans danger : rien n'est supprimé ni dupliqué.
+        </p>
+        <Button
+          variant="outline"
+          className="mt-3 w-full rounded-xl"
+          onClick={() => void loadDemo()}
+        >
+          Charger les données de démonstration
+        </Button>
+      </div>
+
       <div className="rounded-2xl border border-border bg-card p-4">
         <SectionTitle>Nouvelle ville</SectionTitle>
         <div className="mt-3 flex gap-2">
