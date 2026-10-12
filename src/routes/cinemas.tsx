@@ -27,7 +27,7 @@ export const Route = createFileRoute("/cinemas")({
 });
 
 function Cinemas() {
-  const cinemas = useQuery({ queryKey: ["cinemas"], queryFn: fetchCinemas });
+  const cinemas = useQuery({ queryKey: ["cinemas"], queryFn: () => fetchCinemas() });
 
   return (
     <div className="min-h-screen pb-24">

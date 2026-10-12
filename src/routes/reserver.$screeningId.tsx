@@ -15,9 +15,9 @@ import {
   fetchScreening,
   fetchSeats,
   fetchTakenSeatIds,
+  startOnlinePayment,
 } from "@/lib/api";
 import { paymentMethods, type PaymentMethodId } from "@/lib/payments";
-import { startOnlinePayment } from "@/lib/payments.functions";
 import { t } from "@/lib/i18n";
 
 export const Route = createFileRoute("/reserver/$screeningId")({
@@ -39,6 +39,7 @@ export const Route = createFileRoute("/reserver/$screeningId")({
 });
 
 const dateFmt = new Intl.DateTimeFormat("fr-FR", {
+  timeZone: "Africa/Algiers",
   weekday: "long",
   day: "numeric",
   month: "long",
@@ -58,17 +59,17 @@ function BookingPage() {
 
   const screening = useQuery({
     queryKey: ["screening", screeningId],
-    queryFn: () => fetchScreening(screeningId),
+    queryFn: () => fetchScreening({ data: screeningId }),
   });
   const hallId = screening.data?.hall_id;
   const seats = useQuery({
     queryKey: ["seats", hallId],
-    queryFn: () => fetchSeats(hallId!),
+    queryFn: () => fetchSeats({ data: hallId! }),
     enabled: !!hallId,
   });
   const taken = useQuery({
     queryKey: ["taken", screeningId],
-    queryFn: () => fetchTakenSeatIds(screeningId),
+    queryFn: () => fetchTakenSeatIds({ data: screeningId }),
   });
 
   const takenSet = useMemo(() => new Set(taken.data ?? []), [taken.data]);
@@ -106,13 +107,11 @@ function BookingPage() {
     let bookingId: string | null = null;
     try {
       const booking = await createBooking({
-        screeningId,
-        seatIds: selected,
-        paymentMethod: method,
+        data: { screeningId, seatIds: selected, paymentMethod: method },
       });
       bookingId = booking.bookingId;
       if (method !== "espece") {
-        const payment = await startOnlinePayment({ data: { bookingId } });
+        const payment = await startOnlinePayment({ data: bookingId });
         if (payment.status === "redirect") {
           window.location.assign(payment.url);
           return;
@@ -123,7 +122,7 @@ function BookingPage() {
       navigate({ to: "/tickets", search: { qr: booking.qrCode } });
     } catch (e) {
       // Paiement échoué : on libère immédiatement les sièges.
-      if (bookingId) await cancelPendingBooking(bookingId).catch(() => {});
+      if (bookingId) await cancelPendingBooking({ data: bookingId }).catch(() => {});
       toast.error(e instanceof Error ? e.message : "Erreur lors de la réservation");
       void taken.refetch();
       setSelected([]);

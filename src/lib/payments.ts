@@ -1,8 +1,7 @@
 // Couche paiement générique (billetterie), indépendante du domaine cinéma.
 // Le navigateur ne confirme jamais un paiement : il crée la réservation
-// (book_seats), puis demande au serveur de lancer le paiement
-// (startOnlinePayment dans payments.functions.ts). Seul le serveur, via la clé
-// service_role, appelle confirm_booking_payment.
+// (createBooking), puis demande au serveur de lancer le paiement
+// (startOnlinePayment dans api.ts). Seul le serveur confirme un paiement.
 
 export type PaymentMethodId = "cib" | "baridimob" | "dahabia" | "espece";
 

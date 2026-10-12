@@ -1,10 +1,13 @@
 # Notes for coding agents
 
-- Database changes go in a new file under `supabase/migrations/` (never edit an
-  applied migration). Update `src/integrations/supabase/types.ts` to match
-  (`npx supabase gen types typescript --linked > src/integrations/supabase/types.ts`).
-- Customers must never write to `bookings`, `booking_seats` or `tickets`
-  directly: use the SQL functions described in README.md.
-- `SUPABASE_SERVICE_ROLE_KEY` is only used in server code
-  (`client.server.ts`, server functions). Never import it from a component.
-- Run `bun run typecheck`, `bun run lint` and `bun run build` before pushing.
+- Layout: `src/server/` is server-only (database, auth, business logic in
+  `services/`). `src/lib/api.ts` exposes it to pages as server functions.
+  Pages never import `src/server/` directly (the build fails if they do).
+- Database changes: edit `src/server/db/schema.ts`, run `bun run db:generate`,
+  commit the new file in `drizzle/`. Never edit an applied migration.
+- Every server function validates input with zod and uses `requireUser` /
+  `requireRole` for anything private. Errors meant for users are `AppError`;
+  anything else is replaced by a generic message.
+- Business rules live in `src/server/services/` and are covered by `tests/`.
+  Add or update tests with every rule change.
+- Before pushing: `bun run typecheck && bun run lint && bun run test && bun run build`.

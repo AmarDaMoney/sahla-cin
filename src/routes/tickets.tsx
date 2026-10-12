@@ -46,6 +46,7 @@ export const Route = createFileRoute("/tickets")({
 });
 
 const fmt = new Intl.DateTimeFormat("fr-FR", {
+  timeZone: "Africa/Algiers",
   weekday: "long",
   day: "numeric",
   month: "long",
@@ -108,7 +109,7 @@ function TicketsPage() {
 
   const tickets = useQuery({
     queryKey: ["my-tickets", user?.id],
-    queryFn: fetchMyTickets,
+    queryFn: () => fetchMyTickets(),
     enabled: !!user,
   });
 

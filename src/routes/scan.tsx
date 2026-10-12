@@ -43,7 +43,7 @@ function ScanPage() {
     busyRef.current = true;
     try {
       setLastCode(value);
-      setResult(await scanTicket(value));
+      setResult(await scanTicket({ data: { code: value, collectCash: false } }));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erreur de contrôle");
       setResult(null);
@@ -54,7 +54,7 @@ function ScanPage() {
 
   async function collectCash() {
     try {
-      setResult(await scanTicket(lastCode, true));
+      setResult(await scanTicket({ data: { code: lastCode, collectCash: true } }));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erreur d'encaissement");
     }
@@ -147,7 +147,7 @@ function ScanPage() {
           <div
             className={`mt-5 rounded-2xl border p-4 ${
               result.outcome === "ok"
-                ? "border-primary bg-primary/15"
+                ? "border-emerald-500 bg-emerald-500/15"
                 : result.outcome === "unpaid" || result.outcome === "used"
                   ? "border-amber-500 bg-amber-500/15"
                   : "border-destructive bg-destructive/15"
@@ -156,7 +156,7 @@ function ScanPage() {
           >
             <div className="flex items-center gap-3">
               {result.outcome === "ok" ? (
-                <CheckCircle2 className="size-6 text-primary" />
+                <CheckCircle2 className="size-6 text-emerald-500" />
               ) : result.outcome === "unpaid" || result.outcome === "used" ? (
                 <AlertTriangle className="size-6 text-amber-500" />
               ) : (

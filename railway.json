@@ -5,9 +5,9 @@
     "buildCommand": "bun install --frozen-lockfile && bun run build"
   },
   "deploy": {
-    "startCommand": "node .output/server/index.mjs",
-    "healthcheckPath": "/",
-    "healthcheckTimeout": 60,
+    "startCommand": "node scripts/migrate.mjs && node .output/server/index.mjs",
+    "healthcheckPath": "/api/auth/ok",
+    "healthcheckTimeout": 120,
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 5
   }

@@ -50,14 +50,13 @@ export const Route = createFileRoute("/contributeur")({
 
 const languages: AudioLanguage[] = ["VO", "VF", "VOSTFR", "VOSTAR", "AR_DUB"];
 const fmt = new Intl.DateTimeFormat("fr-FR", {
+  timeZone: "Africa/Algiers",
   weekday: "short",
   day: "numeric",
   month: "short",
   hour: "2-digit",
   minute: "2-digit",
 });
-
-type StaffCinema = { id: string; name: string; halls: { id: string; name: string }[] };
 
 function Contributor() {
   const { user, isContributor, loading } = useAuth();
@@ -71,18 +70,16 @@ function Contributor() {
 
   const staff = useQuery({
     queryKey: ["staff-cinemas", user?.id],
-    queryFn: fetchMyStaffCinemas,
+    queryFn: () => fetchMyStaffCinemas(),
     enabled: !!user,
   });
-  const cinemas = ((staff.data ?? []) as unknown as { cinema: StaffCinema | null }[])
-    .map((r) => r.cinema)
-    .filter((c): c is StaffCinema => !!c);
+  const cinemas = staff.data ?? [];
   const current = cinemas.find((c) => c.id === cinemaId) ?? cinemas[0];
 
-  const movies = useQuery({ queryKey: ["movies"], queryFn: fetchMovies });
+  const movies = useQuery({ queryKey: ["movies"], queryFn: () => fetchMovies() });
   const screenings = useQuery({
     queryKey: ["cinema-screenings", current?.id],
-    queryFn: () => fetchScreeningsForCinema(current!.id),
+    queryFn: () => fetchScreeningsForCinema({ data: current!.id }),
     enabled: !!current,
   });
 
@@ -92,12 +89,15 @@ function Contributor() {
       return;
     }
     try {
+      // Heure saisie = heure d'Alger, convertie côté serveur.
       await createScreening({
-        hallId,
-        movieId,
-        startsAt: new Date(startsAt).toISOString(),
-        price: Number(price),
-        audioLanguage: lang,
+        data: {
+          hallId,
+          movieId,
+          startsAtLocal: startsAt,
+          price: Number(price),
+          audioLanguage: lang,
+        },
       });
       toast.success("Séance ajoutée en brouillon");
       setStartsAt("");
@@ -111,7 +111,7 @@ function Contributor() {
     const drafts = (screenings.data ?? []).filter((s) => s.status === "brouillon").map((s) => s.id);
     if (!drafts.length) return;
     try {
-      await setScreeningStatus(drafts, "en_revue");
+      await setScreeningStatus({ data: { ids: drafts, status: "en_revue" } });
       toast.success(t.contributor.submitted);
       await queryClient.invalidateQueries({ queryKey: ["cinema-screenings"] });
     } catch (e) {
@@ -282,10 +282,14 @@ function Contributor() {
                           variant="ghost"
                           aria-label={t.common.delete}
                           onClick={async () => {
-                            await deleteScreening(s.id);
-                            await queryClient.invalidateQueries({
-                              queryKey: ["cinema-screenings"],
-                            });
+                            try {
+                              await deleteScreening({ data: s.id });
+                              await queryClient.invalidateQueries({
+                                queryKey: ["cinema-screenings"],
+                              });
+                            } catch (e) {
+                              toast.error(e instanceof Error ? e.message : "Erreur");
+                            }
                           }}
                         >
                           <Trash2 className="size-4" />

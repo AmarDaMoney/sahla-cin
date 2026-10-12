@@ -1,269 +1,313 @@
-import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
-import type { PaymentMethodId } from "@/lib/payments";
+// API de l'application : fonctions serveur appelées par les pages.
+// Le code des handlers ne s'exécute que sur le serveur ; le navigateur n'a
+// jamais accès direct à la base de données.
+//
+// Règles :
+//  - chaque entrée est validée avec zod ;
+//  - toute donnée privée passe par requireUser / requireRole ;
+//  - la logique métier vit dans src/server/services (testée dans tests/).
+import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
+import { requireRole, requireUser, withViewer } from "@/lib/middleware";
+import type { PaymentStart } from "@/lib/payments";
+import { AppError } from "@/lib/errors";
+import { serialize, type Serialized } from "@/server/serialize";
+import * as admin from "@/server/services/admin";
+import * as booking from "@/server/services/booking";
+import * as catalog from "@/server/services/catalog";
+import { notifyBooking } from "@/server/services/notifications";
+import * as programme from "@/server/services/programme";
+import { scanTicket as scan } from "@/server/services/scan";
+import type { AppRole as Role } from "@/server/viewer";
 
-export type AppRole = Database["public"]["Enums"]["app_role"];
-export type AudioLanguage = Database["public"]["Enums"]["audio_language"];
-export type PublishStatus = Database["public"]["Enums"]["publish_status"];
-export type Movie = Database["public"]["Tables"]["movies"]["Row"];
-export type City = Database["public"]["Tables"]["cities"]["Row"];
-export type Seat = Database["public"]["Tables"]["seats"]["Row"];
+export type AppRole = Role;
+export type AudioLanguage = "VO" | "VF" | "VOSTFR" | "VOSTAR" | "AR_DUB";
+export type PublishStatus = "brouillon" | "en_revue" | "publie";
+export type ScreeningFull = Serialized<catalog.ScreeningFull>;
+export type Movie = ScreeningFull["movie"];
+export type { ScanOutcome, ScanResult } from "@/server/services/scan";
 
-const SCREENING_SELECT =
-  "id, starts_at, price, audio_language, status, hall_id, movie_id, movie:movies(*), hall:halls(id, name, type, capacity, cinema:cinemas(id, name, address, latitude, longitude, city_id, city:cities(id, name)))";
+const id = z.string().uuid();
+const audioLanguage = z.enum(["VO", "VF", "VOSTFR", "VOSTAR", "AR_DUB"]);
+const publishStatus = z.enum(["brouillon", "en_revue", "publie"]);
+const appRole = z.enum(["client", "contributeur", "admin", "agent_guichet"]);
+const optionalText = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .nullable()
+    .transform((v) => v || null);
+const httpUrl = z
+  .string()
+  .trim()
+  .url()
+  .max(2000)
+  .refine((v) => /^https?:\/\//.test(v), "URL http(s) attendue")
+  .nullable()
+  .or(z.literal("").transform(() => null));
 
-export type ScreeningFull = {
-  id: string;
-  starts_at: string;
-  price: number;
-  audio_language: AudioLanguage;
-  status: PublishStatus;
-  hall_id: string;
-  movie_id: string;
-  movie: Movie;
-  hall: {
-    id: string;
-    name: string;
-    type: Database["public"]["Enums"]["hall_type"];
-    capacity: number;
-    cinema: {
-      id: string;
-      name: string;
-      address: string | null;
-      latitude: number | null;
-      longitude: number | null;
-      city_id: string;
-      city: { id: string; name: string } | null;
-    };
-  };
-};
+/* ------------------------------------------------------------ Session */
 
-function unwrap<T>(res: { data: T; error: { message: string } | null }): T {
-  if (res.error) throw new Error(res.error.message);
-  return res.data;
-}
+export const getMe = createServerFn({ method: "GET" })
+  .middleware([withViewer])
+  .handler(async ({ context }) => context.viewer);
 
-// Pour les requêtes qui renvoient obligatoirement une ligne ou une liste.
-function req<T>(res: { data: T; error: { message: string } | null }): NonNullable<T> {
-  const data = unwrap(res);
-  if (data == null) throw new Error("Donnée introuvable");
-  return data as NonNullable<T>;
-}
+// Options de connexion disponibles (Google seulement si configuré).
+export const fetchAuthOptions = createServerFn({ method: "GET" }).handler(async () => ({
+  google: !!(process.env["GOOGLE_CLIENT_ID"] && process.env["GOOGLE_CLIENT_SECRET"]),
+}));
 
-export async function fetchCities() {
-  return req(await supabase.from("cities").select("*").order("name"));
-}
+/* ------------------------------------------------------------ Catalogue */
 
-export async function fetchCinemas() {
-  return req(
-    await supabase
-      .from("cinemas")
-      .select("*, city:cities(id, name), halls(id, name, type, capacity)")
-      .order("name"),
+export const fetchCities = createServerFn({ method: "GET" })
+  .middleware([withViewer])
+  .handler(async ({ context }) => serialize(await catalog.listCities(context.db)));
+
+export const fetchCinemas = createServerFn({ method: "GET" })
+  .middleware([withViewer])
+  .handler(async ({ context }) => serialize(await catalog.listCinemas(context.db)));
+
+export const fetchCinema = createServerFn({ method: "GET" })
+  .middleware([withViewer])
+  .inputValidator(id)
+  .handler(async ({ data, context }) => serialize(await catalog.getCinema(context.db, data)));
+
+export const fetchMovies = createServerFn({ method: "GET" })
+  .middleware([withViewer])
+  .handler(async ({ context }) => serialize(await catalog.listMovies(context.db)));
+
+export const fetchMovie = createServerFn({ method: "GET" })
+  .middleware([withViewer])
+  .inputValidator(id)
+  .handler(async ({ data, context }) => serialize(await catalog.getMovie(context.db, data)));
+
+export const fetchPublishedScreenings = createServerFn({ method: "GET" })
+  .middleware([withViewer])
+  .handler(async ({ context }) => serialize(await catalog.listPublishedScreenings(context.db)));
+
+export const fetchScreening = createServerFn({ method: "GET" })
+  .middleware([withViewer])
+  .inputValidator(id)
+  .handler(async ({ data, context }) =>
+    serialize(await catalog.getScreening(context.db, context.viewer, data)),
   );
-}
 
-export async function fetchCinema(id: string) {
-  return unwrap(
-    await supabase
-      .from("cinemas")
-      .select("*, city:cities(id, name), halls(id, name, type, capacity)")
-      .eq("id", id)
-      .maybeSingle(),
-  );
-}
+export const fetchSeats = createServerFn({ method: "GET" })
+  .middleware([withViewer])
+  .inputValidator(id)
+  .handler(async ({ data, context }) => serialize(await catalog.listSeats(context.db, data)));
 
-export async function fetchPublishedScreenings(): Promise<ScreeningFull[]> {
-  const nowIso = new Date().toISOString();
-  return req(
-    await supabase
-      .from("screenings")
-      .select(SCREENING_SELECT)
-      .eq("status", "publie")
-      .gte("starts_at", nowIso)
-      .order("starts_at"),
-  ) as unknown as ScreeningFull[];
-}
+export const fetchTakenSeatIds = createServerFn({ method: "GET" })
+  .middleware([withViewer])
+  .inputValidator(id)
+  .handler(async ({ data, context }) => catalog.takenSeatIds(context.db, data));
 
-export async function fetchMovie(id: string) {
-  return unwrap(await supabase.from("movies").select("*").eq("id", id).maybeSingle());
-}
+/* ---------------------------------------------------------- Réservation */
 
-export async function fetchMovies() {
-  return req(await supabase.from("movies").select("*").order("title"));
-}
+const paymentMethodId = z.enum(["cib", "baridimob", "dahabia", "espece"]);
 
-export async function fetchScreening(id: string): Promise<ScreeningFull | null> {
-  return unwrap(
-    await supabase.from("screenings").select(SCREENING_SELECT).eq("id", id).maybeSingle(),
-  ) as unknown as ScreeningFull | null;
-}
-
-export async function fetchSeats(hallId: string) {
-  return req(
-    await supabase
-      .from("seats")
-      .select("*")
-      .eq("hall_id", hallId)
-      .order("row_label")
-      .order("seat_number"),
-  );
-}
-
-// Les fonctions SQL renvoient un code (ex. SEATS_TAKEN) et un message lisible
-// dans « hint ».
-function rpcError(error: { message: string; hint?: string | null }) {
-  return new Error(error.hint || error.message);
-}
-
-export async function fetchTakenSeatIds(screeningId: string) {
-  const { data, error } = await supabase.rpc("get_taken_seats", { _screening_id: screeningId });
-  if (error) throw rpcError(error);
-  return data ?? [];
-}
-
-// Réservation atomique côté serveur : prix, statut et QR code sont fixés par
-// la base. La réservation reste « en_attente_paiement » jusqu'au paiement.
-export async function createBooking(input: {
-  screeningId: string;
-  seatIds: string[];
-  paymentMethod: PaymentMethodId;
-}) {
-  const { data, error } = await supabase.rpc("book_seats", {
-    _screening_id: input.screeningId,
-    _seat_ids: input.seatIds,
-    _payment_method: input.paymentMethod,
+export const createBooking = createServerFn({ method: "POST" })
+  .middleware([requireUser])
+  .inputValidator(
+    z.object({
+      screeningId: id,
+      seatIds: z.array(id).min(1).max(booking.MAX_SEATS_PER_BOOKING),
+      paymentMethod: paymentMethodId,
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const result = await booking.bookSeats(context.db, context.viewer.id, data);
+    // Paiement en ligne : l'e-mail part après confirmation du paiement.
+    if (data.paymentMethod === "espece") notifyBooking(context.db, result.bookingId);
+    return serialize(result);
   });
-  if (error) throw rpcError(error);
-  const row = data?.[0];
-  if (!row) throw new Error("Réservation impossible");
-  return {
-    bookingId: row.booking_id,
-    qrCode: row.qr_code,
-    totalAmount: row.total_amount,
-    expiresAt: row.expires_at,
-  };
-}
 
-export async function cancelPendingBooking(bookingId: string) {
-  const { error } = await supabase.rpc("cancel_pending_booking", { _booking_id: bookingId });
-  if (error) throw rpcError(error);
-}
-
-export async function fetchMyTickets() {
-  return req(
-    await supabase
-      .from("tickets")
-      .select(
-        `id, qr_code, scanned, scanned_at, created_at,
-         booking:bookings(id, status, total_amount, payment_method, expires_at,
-           booking_seats(seat:seats(row_label, seat_number)),
-           screening:screenings(${SCREENING_SELECT}))`,
-      )
-      .order("created_at", { ascending: false }),
+export const cancelPendingBooking = createServerFn({ method: "POST" })
+  .middleware([requireUser])
+  .inputValidator(id)
+  .handler(async ({ data, context }) =>
+    booking.cancelPendingBooking(context.db, context.viewer.id, data),
   );
-}
 
-export type ScanOutcome =
-  "ok" | "used" | "invalid" | "unpaid" | "cancelled" | "wrong_cinema" | "too_early" | "expired";
-
-export type ScanResult = { outcome: ScanOutcome; info: string | null; amount: number | null };
-
-// Contrôle côté serveur : paiement, annulation, cinéma de l'agent et horaire.
-// collectCash = true : l'agent encaisse une réservation « paiement au guichet ».
-export async function scanTicket(code: string, collectCash = false): Promise<ScanResult> {
-  const { data, error } = await supabase.rpc("scan_ticket", {
-    _code: code.trim(),
-    _collect_cash: collectCash,
+// Lance le paiement en ligne d'une réservation du client connecté.
+//
+// PAYMENT_MODE=simulation : paiement accepté immédiatement (démo, tests).
+// Sans PAYMENT_MODE : paiement en ligne désactivé, seul le guichet fonctionne.
+//
+// Prestataire réel (SATIM / CIB-Edahabia via une banque, Chargily Pay, Slick
+// Pay…) : créer ici la session de paiement et renvoyer { status: "redirect",
+// url }, puis appeler booking.confirmPayment depuis une route webhook qui
+// vérifie la signature du prestataire (voir README).
+export const startOnlinePayment = createServerFn({ method: "POST" })
+  .middleware([requireUser])
+  .inputValidator(id)
+  .handler(async ({ data, context }): Promise<PaymentStart> => {
+    const b = await booking.getOwnBooking(context.db, context.viewer.id, data);
+    if (!b) throw new AppError("NOT_FOUND", "Réservation introuvable");
+    if (b.status === "confirme") return { status: "confirmed" };
+    if (b.status !== "en_attente_paiement" || b.payment_method === "espece") {
+      throw new AppError("NOT_PAYABLE", "Cette réservation ne peut pas être payée en ligne");
+    }
+    if (process.env["PAYMENT_MODE"] !== "simulation") {
+      throw new AppError(
+        "PAYMENT_UNAVAILABLE",
+        "Le paiement en ligne n'est pas encore disponible. Choisissez « Paiement au guichet ».",
+      );
+    }
+    const result = await booking.confirmPayment(context.db, {
+      bookingId: b.id,
+      amount: b.total_amount,
+      reference: `SIM-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
+    });
+    if (result !== "confirmed" && result !== "already_confirmed") {
+      throw new AppError("PAYMENT_REFUSED", "Paiement refusé : la réservation a expiré");
+    }
+    if (result === "confirmed") notifyBooking(context.db, b.id);
+    return { status: "confirmed" };
   });
-  if (error) throw rpcError(error);
-  const row = data?.[0];
-  if (!row) return { outcome: "invalid", info: null, amount: null };
-  return { outcome: row.outcome as ScanOutcome, info: row.info, amount: row.amount };
-}
 
-/* --- Contributeur / Admin --- */
-
-export async function fetchMyStaffCinemas() {
-  return req(
-    await supabase
-      .from("cinema_staff")
-      .select("cinema:cinemas(id, name, halls(id, name, capacity))"),
+export const fetchMyTickets = createServerFn({ method: "GET" })
+  .middleware([requireUser])
+  .handler(async ({ context }) =>
+    serialize(await booking.listMyTickets(context.db, context.viewer.id)),
   );
-}
 
-export async function fetchScreeningsForCinema(cinemaId: string) {
-  return req(
-    await supabase
-      .from("screenings")
-      .select(SCREENING_SELECT)
-      .order("starts_at", { ascending: true }),
-  ).filter(
-    (s) => (s as unknown as ScreeningFull).hall.cinema.id === cinemaId,
-  ) as unknown as ScreeningFull[];
-}
+/* ------------------------------------------------------- Contrôle billets */
 
-export async function createScreening(input: {
-  hallId: string;
-  movieId: string;
-  startsAt: string;
-  price: number;
-  audioLanguage: AudioLanguage;
-}) {
-  const { data: userData } = await supabase.auth.getUser();
-  return unwrap(
-    await supabase
-      .from("screenings")
-      .insert({
-        hall_id: input.hallId,
-        movie_id: input.movieId,
-        starts_at: input.startsAt,
-        price: input.price,
-        audio_language: input.audioLanguage,
-        status: "brouillon",
-        created_by: userData.user?.id ?? null,
-      })
-      .select("id")
-      .single(),
+export const scanTicket = createServerFn({ method: "POST" })
+  .middleware([requireRole("agent_guichet", "admin")])
+  .inputValidator(z.object({ code: z.string().trim().min(1).max(64), collectCash: z.boolean() }))
+  .handler(async ({ data, context }) =>
+    scan(context.db, context.viewer, data.code, data.collectCash),
   );
-}
 
-export async function setScreeningStatus(ids: string[], status: PublishStatus) {
-  const res = await supabase.from("screenings").update({ status }).in("id", ids);
-  if (res.error) throw new Error(res.error.message);
-}
+/* ----------------------------------------------------------- Programme */
 
-export async function deleteScreening(id: string) {
-  const res = await supabase.from("screenings").delete().eq("id", id);
-  if (res.error) throw new Error(res.error.message);
-}
+export const fetchMyStaffCinemas = createServerFn({ method: "GET" })
+  .middleware([requireRole("contributeur", "admin")])
+  .handler(async ({ context }) =>
+    serialize(await programme.listManagedCinemas(context.db, context.viewer)),
+  );
 
-export async function fetchScreeningsByStatus(status: PublishStatus) {
-  return req(
-    await supabase
-      .from("screenings")
-      .select(SCREENING_SELECT)
-      .eq("status", status)
-      .order("starts_at"),
-  ) as unknown as ScreeningFull[];
-}
+export const fetchScreeningsForCinema = createServerFn({ method: "GET" })
+  .middleware([requireRole("contributeur", "admin")])
+  .inputValidator(id)
+  .handler(async ({ data, context }) =>
+    serialize(await programme.listCinemaScreenings(context.db, context.viewer, data)),
+  );
 
-export async function upsertMovie(input: {
-  id?: string;
-  title: string;
-  duration_minutes: number;
-  genre: string | null;
-  synopsis: string | null;
-  poster_url: string | null;
-  age_rating: string | null;
-}) {
-  const res: { data: { id: string } | null; error: { message: string } | null } = input.id
-    ? await supabase.from("movies").update(input).eq("id", input.id).select("id").single()
-    : await supabase.from("movies").insert(input).select("id").single();
-  return req(res);
-}
+export const createScreening = createServerFn({ method: "POST" })
+  .middleware([requireRole("contributeur", "admin")])
+  .inputValidator(
+    z.object({
+      hallId: id,
+      movieId: id,
+      startsAtLocal: z.string().max(16),
+      price: z.number().int().min(0).max(100_000),
+      audioLanguage,
+    }),
+  )
+  .handler(async ({ data, context }) =>
+    programme.createScreening(context.db, context.viewer, data),
+  );
 
-export async function assignRole(userId: string, role: AppRole) {
-  const res = await supabase.from("user_roles").insert({ user_id: userId, role });
-  if (res.error) throw new Error(res.error.message);
-}
+export const setScreeningStatus = createServerFn({ method: "POST" })
+  .middleware([requireRole("contributeur", "admin")])
+  .inputValidator(z.object({ ids: z.array(id).max(500), status: publishStatus }))
+  .handler(async ({ data, context }) =>
+    programme.setScreeningStatus(context.db, context.viewer, data.ids, data.status),
+  );
+
+export const deleteScreening = createServerFn({ method: "POST" })
+  .middleware([requireRole("contributeur", "admin")])
+  .inputValidator(id)
+  .handler(async ({ data, context }) =>
+    programme.deleteScreening(context.db, context.viewer, data),
+  );
+
+/* ------------------------------------------------------- Administration */
+
+const adminOnly = requireRole("admin");
+
+export const fetchScreeningsByStatus = createServerFn({ method: "GET" })
+  .middleware([adminOnly])
+  .inputValidator(publishStatus)
+  .handler(async ({ data, context }) =>
+    serialize(await admin.listScreeningsByStatus(context.db, data)),
+  );
+
+export const upsertMovie = createServerFn({ method: "POST" })
+  .middleware([adminOnly])
+  .inputValidator(
+    z.object({
+      id: id.optional(),
+      title: z.string().trim().min(1).max(200),
+      title_ar: optionalText(200),
+      duration_minutes: z.number().int().min(1).max(600),
+      genre: optionalText(100),
+      synopsis: optionalText(4000),
+      poster_url: httpUrl,
+      trailer_url: httpUrl,
+      age_rating: optionalText(40),
+    }),
+  )
+  .handler(async ({ data, context }) => admin.upsertMovie(context.db, data));
+
+export const createCity = createServerFn({ method: "POST" })
+  .middleware([adminOnly])
+  .inputValidator(z.string().trim().min(1).max(100))
+  .handler(async ({ data, context }) => admin.createCity(context.db, data));
+
+export const createCinema = createServerFn({ method: "POST" })
+  .middleware([adminOnly])
+  .inputValidator(
+    z.object({
+      name: z.string().trim().min(1).max(200),
+      city_id: id,
+      address: optionalText(300),
+      phone: optionalText(40),
+      latitude: z.number().min(-90).max(90).nullable(),
+      longitude: z.number().min(-180).max(180).nullable(),
+      description: optionalText(2000),
+    }),
+  )
+  .handler(async ({ data, context }) => admin.createCinema(context.db, data));
+
+export const createHall = createServerFn({ method: "POST" })
+  .middleware([adminOnly])
+  .inputValidator(
+    z.object({
+      cinema_id: id,
+      name: z.string().trim().min(1).max(100),
+      capacity: z.number().int().min(1).max(260),
+      type: z.enum(["standard", "vip"]),
+    }),
+  )
+  .handler(async ({ data, context }) => admin.createHall(context.db, data));
+
+export const fetchTeam = createServerFn({ method: "GET" })
+  .middleware([adminOnly])
+  .handler(async ({ context }) => admin.listTeam(context.db));
+
+export const assignRole = createServerFn({ method: "POST" })
+  .middleware([adminOnly])
+  .inputValidator(
+    z.object({ email: z.string().trim().email().max(320), role: appRole, cinemaId: id.optional() }),
+  )
+  .handler(async ({ data, context }) => admin.grantRole(context.db, data));
+
+export const revokeRole = createServerFn({ method: "POST" })
+  .middleware([adminOnly])
+  .inputValidator(z.object({ userId: id, role: appRole }))
+  .handler(async ({ data, context }) => {
+    if (data.userId === context.viewer.id && data.role === "admin") {
+      throw new AppError("FORBIDDEN", "Vous ne pouvez pas retirer votre propre rôle admin");
+    }
+    return admin.revokeRole(context.db, data);
+  });
+
+export const removeStaff = createServerFn({ method: "POST" })
+  .middleware([adminOnly])
+  .inputValidator(z.object({ userId: id, cinemaId: id }))
+  .handler(async ({ data, context }) => admin.removeStaff(context.db, data));

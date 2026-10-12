@@ -44,18 +44,40 @@ function isH3SwallowedErrorBody(body: string): boolean {
   }
 }
 
+// En-têtes de sécurité ajoutés à toutes les réponses.
+const SECURITY_HEADERS: Record<string, string> = {
+  "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  // Caméra autorisée pour le scanner de billets, rien d'autre.
+  "Permissions-Policy": "camera=(self), microphone=(), geolocation=(), payment=()",
+  "Content-Security-Policy":
+    "frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'",
+};
+
+function withSecurityHeaders(response: Response): Response {
+  const res = new Response(response.body, response);
+  for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
+    if (!res.headers.has(name)) res.headers.set(name, value);
+  }
+  return res;
+}
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
-      return await normalizeCatastrophicSsrResponse(response);
+      return withSecurityHeaders(await normalizeCatastrophicSsrResponse(response));
     } catch (error) {
       console.error(error);
-      return new Response(renderErrorPage(), {
-        status: 500,
-        headers: { "content-type": "text/html; charset=utf-8" },
-      });
+      return withSecurityHeaders(
+        new Response(renderErrorPage(), {
+          status: 500,
+          headers: { "content-type": "text/html; charset=utf-8" },
+        }),
+      );
     }
   },
 };

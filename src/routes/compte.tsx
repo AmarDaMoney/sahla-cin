@@ -40,6 +40,9 @@ export const Route = createFileRoute("/compte")({
   component: Account,
 });
 
+// Numéro WhatsApp du support, format international sans « + » (ex. 213555123456).
+const whatsapp = import.meta.env["VITE_WHATSAPP_NUMBER"] as string | undefined;
+
 function Account() {
   const { user, roles, isAdmin, isContributor, isAgent, signOut } = useAuth();
 
@@ -108,14 +111,16 @@ function Account() {
           </div>
         )}
 
-        <div className="mt-4">
-          <Button asChild variant="outline" className="w-full justify-start rounded-xl">
-            <a href="https://wa.me/213000000000" target="_blank" rel="noopener noreferrer">
-              <MessageCircle className="size-4 text-primary" />
-              Signaler une erreur sur WhatsApp
-            </a>
-          </Button>
-        </div>
+        {whatsapp && (
+          <div className="mt-4">
+            <Button asChild variant="outline" className="w-full justify-start rounded-xl">
+              <a href={`https://wa.me/${whatsapp}`} target="_blank" rel="noopener noreferrer">
+                <MessageCircle className="size-4 text-primary" />
+                Signaler une erreur sur WhatsApp
+              </a>
+            </Button>
+          </div>
+        )}
 
         <Accordion
           type="single"

@@ -27,11 +27,16 @@ export const Route = createFileRoute("/cinema/$cinemaId")({
 });
 
 const dayFmt = new Intl.DateTimeFormat("fr-FR", {
+  timeZone: "Africa/Algiers",
   weekday: "short",
   day: "numeric",
   month: "short",
 });
-const timeFmt = new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" });
+const timeFmt = new Intl.DateTimeFormat("fr-FR", {
+  timeZone: "Africa/Algiers",
+  hour: "2-digit",
+  minute: "2-digit",
+});
 
 function mapsLink(cinema: {
   name: string;
@@ -47,10 +52,13 @@ function mapsLink(cinema: {
 
 function CinemaPage() {
   const { cinemaId } = Route.useParams();
-  const cinema = useQuery({ queryKey: ["cinema", cinemaId], queryFn: () => fetchCinema(cinemaId) });
+  const cinema = useQuery({
+    queryKey: ["cinema", cinemaId],
+    queryFn: () => fetchCinema({ data: cinemaId }),
+  });
   const screenings = useQuery({
     queryKey: ["screenings", "published"],
-    queryFn: fetchPublishedScreenings,
+    queryFn: () => fetchPublishedScreenings(),
   });
 
   const list = (screenings.data ?? []).filter((s) => s.hall.cinema.id === cinemaId);

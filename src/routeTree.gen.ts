@@ -15,11 +15,13 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as CinemasRouteImport } from './routes/cinemas'
 import { Route as CompteRouteImport } from './routes/compte'
 import { Route as ContributeurRouteImport } from './routes/contributeur'
+import { Route as ReinitialiserRouteImport } from './routes/reinitialiser'
 import { Route as ScanRouteImport } from './routes/scan'
 import { Route as TicketsRouteImport } from './routes/tickets'
 import { Route as CinemaCinemaIdRouteImport } from './routes/cinema.$cinemaId'
 import { Route as FilmMovieIdRouteImport } from './routes/film.$movieId'
 import { Route as ReserverScreeningIdRouteImport } from './routes/reserver.$screeningId'
+import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -51,6 +53,11 @@ const ContributeurRoute = ContributeurRouteImport.update({
   path: '/contributeur',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ReinitialiserRoute = ReinitialiserRouteImport.update({
+  id: '/reinitialiser',
+  path: '/reinitialiser',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ScanRoute = ScanRouteImport.update({
   id: '/scan',
   path: '/scan',
@@ -76,6 +83,11 @@ const ReserverScreeningIdRoute = ReserverScreeningIdRouteImport.update({
   path: '/reserver/$screeningId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
+  id: '/api/auth/$',
+  path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -84,11 +96,13 @@ export interface FileRoutesByFullPath {
   '/cinemas': typeof CinemasRoute
   '/compte': typeof CompteRoute
   '/contributeur': typeof ContributeurRoute
+  '/reinitialiser': typeof ReinitialiserRoute
   '/scan': typeof ScanRoute
   '/tickets': typeof TicketsRoute
   '/cinema/$cinemaId': typeof CinemaCinemaIdRoute
   '/film/$movieId': typeof FilmMovieIdRoute
   '/reserver/$screeningId': typeof ReserverScreeningIdRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -97,11 +111,13 @@ export interface FileRoutesByTo {
   '/cinemas': typeof CinemasRoute
   '/compte': typeof CompteRoute
   '/contributeur': typeof ContributeurRoute
+  '/reinitialiser': typeof ReinitialiserRoute
   '/scan': typeof ScanRoute
   '/tickets': typeof TicketsRoute
   '/cinema/$cinemaId': typeof CinemaCinemaIdRoute
   '/film/$movieId': typeof FilmMovieIdRoute
   '/reserver/$screeningId': typeof ReserverScreeningIdRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -111,11 +127,13 @@ export interface FileRoutesById {
   '/cinemas': typeof CinemasRoute
   '/compte': typeof CompteRoute
   '/contributeur': typeof ContributeurRoute
+  '/reinitialiser': typeof ReinitialiserRoute
   '/scan': typeof ScanRoute
   '/tickets': typeof TicketsRoute
   '/cinema/$cinemaId': typeof CinemaCinemaIdRoute
   '/film/$movieId': typeof FilmMovieIdRoute
   '/reserver/$screeningId': typeof ReserverScreeningIdRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -126,11 +144,13 @@ export interface FileRouteTypes {
     | '/cinemas'
     | '/compte'
     | '/contributeur'
+    | '/reinitialiser'
     | '/scan'
     | '/tickets'
     | '/cinema/$cinemaId'
     | '/film/$movieId'
     | '/reserver/$screeningId'
+    | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -139,11 +159,13 @@ export interface FileRouteTypes {
     | '/cinemas'
     | '/compte'
     | '/contributeur'
+    | '/reinitialiser'
     | '/scan'
     | '/tickets'
     | '/cinema/$cinemaId'
     | '/film/$movieId'
     | '/reserver/$screeningId'
+    | '/api/auth/$'
   id:
     | '__root__'
     | '/'
@@ -152,11 +174,13 @@ export interface FileRouteTypes {
     | '/cinemas'
     | '/compte'
     | '/contributeur'
+    | '/reinitialiser'
     | '/scan'
     | '/tickets'
     | '/cinema/$cinemaId'
     | '/film/$movieId'
     | '/reserver/$screeningId'
+    | '/api/auth/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -166,11 +190,13 @@ export interface RootRouteChildren {
   CinemasRoute: typeof CinemasRoute
   CompteRoute: typeof CompteRoute
   ContributeurRoute: typeof ContributeurRoute
+  ReinitialiserRoute: typeof ReinitialiserRoute
   ScanRoute: typeof ScanRoute
   TicketsRoute: typeof TicketsRoute
   CinemaCinemaIdRoute: typeof CinemaCinemaIdRoute
   FilmMovieIdRoute: typeof FilmMovieIdRoute
   ReserverScreeningIdRoute: typeof ReserverScreeningIdRoute
+  ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -217,6 +243,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ContributeurRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/reinitialiser': {
+      id: '/reinitialiser'
+      path: '/reinitialiser'
+      fullPath: '/reinitialiser'
+      preLoaderRoute: typeof ReinitialiserRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/scan': {
       id: '/scan'
       path: '/scan'
@@ -252,6 +285,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReserverScreeningIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/auth/$': {
+      id: '/api/auth/$'
+      path: '/api/auth/$'
+      fullPath: '/api/auth/$'
+      preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -262,11 +302,13 @@ const rootRouteChildren: RootRouteChildren = {
   CinemasRoute: CinemasRoute,
   CompteRoute: CompteRoute,
   ContributeurRoute: ContributeurRoute,
+  ReinitialiserRoute: ReinitialiserRoute,
   ScanRoute: ScanRoute,
   TicketsRoute: TicketsRoute,
   CinemaCinemaIdRoute: CinemaCinemaIdRoute,
   FilmMovieIdRoute: FilmMovieIdRoute,
   ReserverScreeningIdRoute: ReserverScreeningIdRoute,
+  ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

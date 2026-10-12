@@ -30,22 +30,36 @@ export const Route = createFileRoute("/film/$movieId")({
   component: MoviePage,
 });
 
-const dayFmt = new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long" });
-const timeFmt = new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" });
+const dayFmt = new Intl.DateTimeFormat("fr-FR", {
+  timeZone: "Africa/Algiers",
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+});
+// Jour calendaire à Alger (AAAA-MM-JJ), pour regrouper les séances.
+const dayKey = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Algiers" });
+const timeFmt = new Intl.DateTimeFormat("fr-FR", {
+  timeZone: "Africa/Algiers",
+  hour: "2-digit",
+  minute: "2-digit",
+});
 
 function MoviePage() {
   const { movieId } = Route.useParams();
-  const movie = useQuery({ queryKey: ["movie", movieId], queryFn: () => fetchMovie(movieId) });
+  const movie = useQuery({
+    queryKey: ["movie", movieId],
+    queryFn: () => fetchMovie({ data: movieId }),
+  });
   const screenings = useQuery({
     queryKey: ["screenings", "published"],
-    queryFn: fetchPublishedScreenings,
+    queryFn: () => fetchPublishedScreenings(),
   });
 
   const mine = (screenings.data ?? []).filter((s) => s.movie_id === movieId);
 
   const byCinemaDay = new Map<string, typeof mine>();
   mine.forEach((s) => {
-    const key = `${s.hall.cinema.id}|${s.starts_at.slice(0, 10)}`;
+    const key = `${s.hall.cinema.id}|${dayKey.format(new Date(s.starts_at))}`;
     const arr = byCinemaDay.get(key) ?? [];
     arr.push(s);
     byCinemaDay.set(key, arr);

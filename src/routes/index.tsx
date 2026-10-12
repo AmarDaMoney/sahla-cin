@@ -60,10 +60,10 @@ function Index() {
   const [genre, setGenre] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
 
-  const cities = useQuery({ queryKey: ["cities"], queryFn: fetchCities });
+  const cities = useQuery({ queryKey: ["cities"], queryFn: () => fetchCities() });
   const screenings = useQuery({
     queryKey: ["screenings", "published"],
-    queryFn: fetchPublishedScreenings,
+    queryFn: () => fetchPublishedScreenings(),
   });
 
   const list = screenings.data ?? [];
