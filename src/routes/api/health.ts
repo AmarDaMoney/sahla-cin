@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { inArray, sql } from "drizzle-orm";
-import { adminEmails, appUrl, configChecks, envValue } from "@/server/config";
+import { adminEmails, appUrl, configChecks, envValue, hasClientIp } from "@/server/config";
 import { getDb } from "@/server/db/client";
 import { user } from "@/server/db/schema";
 
@@ -43,7 +43,7 @@ async function adminStatus() {
 export const Route = createFileRoute("/api/health")({
   server: {
     handlers: {
-      GET: async () => {
+      GET: async ({ request }) => {
         const database = await databaseStatus();
         const admin = database === "ok" ? await adminStatus() : "base indisponible";
         const checks = configChecks();
@@ -63,6 +63,10 @@ export const Route = createFileRoute("/api/health")({
           email: envValue("RESEND_API_KEY")
             ? "envoyés via Resend"
             : "non envoyés : liens écrits dans les logs Railway",
+          // Sans IP par visiteur, toutes les connexions partagent un même compteur.
+          rateLimit: hasClientIp(request.headers)
+            ? "par visiteur (IP reçue)"
+            : "PARTAGÉE — l'hébergeur n'envoie pas l'IP du visiteur (voir CLIENT_IP_HEADER)",
           payment: envValue("PAYMENT_MODE") === "simulation" ? "simulation" : "guichet uniquement",
         };
         return new Response(JSON.stringify(body, null, 2), {

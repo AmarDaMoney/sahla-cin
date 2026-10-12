@@ -13,6 +13,7 @@
 import { relations, sql } from "drizzle-orm";
 import {
   bigint,
+  customType,
   boolean,
   check,
   doublePrecision,
@@ -134,6 +135,8 @@ export const user_roles = pgTable(
 export const cities = pgTable("cities", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull().unique(),
+  name_ar: text("name_ar"),
+  name_en: text("name_en"),
   created_at: createdAt(),
 });
 
@@ -210,12 +213,16 @@ export const movies = pgTable(
   "movies",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    // Titre et synopsis : français (référence), plus arabe et anglais facultatifs.
     title: text("title").notNull(),
     title_ar: text("title_ar"),
+    title_en: text("title_en"),
     poster_url: text("poster_url"),
     trailer_url: text("trailer_url"),
     duration_minutes: integer("duration_minutes").notNull().default(100),
     synopsis: text("synopsis"),
+    synopsis_ar: text("synopsis_ar"),
+    synopsis_en: text("synopsis_en"),
     genre: text("genre"),
     age_rating: text("age_rating"),
     created_at: createdAt(),
@@ -313,6 +320,34 @@ export const tickets = pgTable("tickets", {
   scanned_by: uuid("scanned_by").references(() => user.id, { onDelete: "set null" }),
   created_at: createdAt(),
 });
+
+/* ----------------------------------------------------------------- Médias */
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType: () => "bytea",
+});
+
+// Images envoyées par les administrateurs (affiches). Stockées dans la base :
+// sauvegardées avec elle, aucun service de stockage à configurer.
+export const media = pgTable(
+  "media",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    content_type: text("content_type").notNull(),
+    data: bytea("data").notNull(),
+    size: integer("size").notNull(),
+    sha256: text("sha256").notNull(),
+    uploaded_by: uuid("uploaded_by").references(() => user.id, { onDelete: "set null" }),
+    created_at: createdAt(),
+  },
+  (t) => [
+    check(
+      "media_content_type_check",
+      sql`${t.content_type} IN ('image/jpeg', 'image/png', 'image/webp')`,
+    ),
+    check("media_size_check", sql`${t.size} BETWEEN 1 AND 3000000`),
+  ],
+);
 
 /* -------------------------------------------------------------- Relations */
 

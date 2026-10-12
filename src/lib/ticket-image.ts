@@ -13,15 +13,33 @@ export type TicketImageData = {
 const W = 720;
 const H = 1080;
 
+export type TicketImageLabels = {
+  appName: string;
+  heading: string;
+  reference: string;
+  seats: string;
+  total: string;
+  footer: string;
+  rtl: boolean;
+};
+
 export async function buildTicketBlob(
   qrCanvas: HTMLCanvasElement,
   data: TicketImageData,
+  labels: TicketImageLabels,
 ): Promise<Blob> {
   const canvas = document.createElement("canvas");
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Canvas indisponible");
+  if (!ctx) throw new Error("Canvas");
+  // Arabe : texte de droite à gauche, aligné sur le bord droit.
+  ctx.direction = labels.rtl ? "rtl" : "ltr";
+  const startX = labels.rtl ? W - 48 : 48;
+  const endX = labels.rtl ? 48 : W - 48;
+  const start = () => (ctx.textAlign = labels.rtl ? "right" : "left");
+  const end = () => (ctx.textAlign = labels.rtl ? "left" : "right");
+  start();
 
   // Fond bleu nuit
   ctx.fillStyle = "#0f172a";
@@ -33,20 +51,20 @@ export async function buildTicketBlob(
 
   ctx.fillStyle = "#ffffff";
   ctx.font = "bold 40px system-ui, sans-serif";
-  ctx.fillText("BookCinéDZ", 48, 96);
+  ctx.fillText(labels.appName, startX, 96);
   ctx.fillStyle = "#dc2626";
   ctx.font = "600 20px system-ui, sans-serif";
-  ctx.fillText("BILLET ÉLECTRONIQUE", 48, 130);
+  ctx.fillText(labels.heading, startX, 130);
 
   // Titre du film
   ctx.fillStyle = "#ffffff";
   ctx.font = "bold 38px system-ui, sans-serif";
-  wrap(ctx, data.title, 48, 200, W - 96, 46);
+  wrap(ctx, data.title, startX, 200, W - 96, 46);
 
   ctx.fillStyle = "#cbd5e1";
   ctx.font = "22px system-ui, sans-serif";
-  ctx.fillText(truncate(ctx, data.cinema, W - 96), 48, 290);
-  ctx.fillText(truncate(ctx, data.dateLabel, W - 96), 48, 324);
+  ctx.fillText(truncate(ctx, data.cinema, W - 96), startX, 290);
+  ctx.fillText(truncate(ctx, data.dateLabel, W - 96), startX, 324);
 
   // Carte QR blanche
   const qrSize = 340;
@@ -60,35 +78,36 @@ export async function buildTicketBlob(
   ctx.textAlign = "center";
   ctx.fillStyle = "#94a3b8";
   ctx.font = "16px system-ui, sans-serif";
-  ctx.fillText("RÉFÉRENCE", W / 2, qrY + qrSize + 76);
+  ctx.fillText(labels.reference.toUpperCase(), W / 2, qrY + qrSize + 76);
   ctx.fillStyle = "#dc2626";
   ctx.font = "bold 26px ui-monospace, monospace";
   ctx.fillText(data.reference, W / 2, qrY + qrSize + 110);
-  ctx.textAlign = "left";
+  start();
 
   // Détails
   let y = qrY + qrSize + 180;
   const line = (label: string, value: string) => {
     ctx.fillStyle = "#94a3b8";
     ctx.font = "20px system-ui, sans-serif";
-    ctx.fillText(label, 48, y);
+    start();
+    ctx.fillText(label, startX, y);
     ctx.fillStyle = "#ffffff";
     ctx.font = "bold 20px system-ui, sans-serif";
-    ctx.textAlign = "right";
-    ctx.fillText(value, W - 48, y);
-    ctx.textAlign = "left";
+    end();
+    ctx.fillText(value, endX, y);
+    start();
     y += 44;
   };
-  line("Sièges", data.seats || "—");
-  line("Total", data.total);
+  line(labels.seats, data.seats || "—");
+  line(labels.total, data.total);
 
   ctx.fillStyle = "#64748b";
   ctx.font = "18px system-ui, sans-serif";
   ctx.textAlign = "center";
-  ctx.fillText("Présentez ce QR code à l'entrée de la salle.", W / 2, H - 48);
+  ctx.fillText(labels.footer, W / 2, H - 48);
 
   return await new Promise<Blob>((resolve, reject) =>
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Export impossible"))), "image/png"),
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Export"))), "image/png"),
   );
 }
 

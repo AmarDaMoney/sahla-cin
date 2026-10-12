@@ -18,40 +18,16 @@ import {
 } from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/useAuth";
 import { fetchMyTickets } from "@/lib/api";
-import { t } from "@/lib/i18n";
+import { useI18n, type I18n } from "@/lib/i18n";
+import { pageHead } from "@/lib/i18n/meta";
 
 export const Route = createFileRoute("/tickets")({
   validateSearch: (search: Record<string, unknown>): { qr?: string } => {
     const qr = search["qr"];
     return typeof qr === "string" ? { qr } : {};
   },
-  head: () => ({
-    meta: [
-      { title: "Mes réservations et billets QR — BookCinéDZ" },
-      {
-        name: "description",
-        content:
-          "Historique de vos réservations de cinéma, billets électroniques avec QR code à télécharger ou partager.",
-      },
-      { property: "og:title", content: "Mes réservations — BookCinéDZ" },
-      {
-        property: "og:description",
-        content: "Vos billets de cinéma avec QR code, téléchargeables et partageables.",
-      },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-    ],
-  }),
+  head: pageHead("tickets"),
   component: TicketsPage,
-});
-
-const fmt = new Intl.DateTimeFormat("fr-FR", {
-  timeZone: "Africa/Algiers",
-  weekday: "long",
-  day: "numeric",
-  month: "long",
-  hour: "2-digit",
-  minute: "2-digit",
 });
 
 type TicketRow = {
@@ -68,7 +44,7 @@ type TicketRow = {
     screening: {
       starts_at: string;
       audio_language: string;
-      movie: { title: string };
+      movie: { title: string; title_ar?: string | null; title_en?: string | null };
       hall: { name: string; cinema: { name: string } };
     } | null;
   } | null;
@@ -94,16 +70,17 @@ function ticketState(tk: TicketRow, now: number): TicketState {
   return b.status === "en_attente_paiement" ? "counter" : "valid";
 }
 
-const stateLabel: Record<TicketState, string> = {
+const stateLabel = (t: I18n["t"]): Record<TicketState, string> => ({
   valid: t.tickets.valid,
   counter: t.tickets.payAtCounter,
   cancelled: t.tickets.cancelled,
   scanned: t.tickets.scanned,
   past: t.tickets.past,
-};
+});
 
 function TicketsPage() {
   const { qr } = Route.useSearch();
+  const { t, date, title } = useI18n();
   const { user, loading } = useAuth();
   const [openQr, setOpenQr] = useState<string | null>(null);
 
@@ -196,22 +173,28 @@ function TicketsPage() {
       <Dialog open={!!active} onOpenChange={(o) => !o && setOpenQr(null)}>
         <DialogContent className="max-w-sm rounded-2xl">
           <DialogHeader>
-            <DialogTitle>{active?.booking?.screening?.movie.title ?? "Billet"}</DialogTitle>
+            <DialogTitle>
+              {active?.booking?.screening
+                ? title(active.booking.screening.movie)
+                : t.tickets.ticket}
+            </DialogTitle>
             <DialogDescription>
               {active?.booking?.screening
-                ? `${active.booking.screening.hall.cinema.name} · ${fmt.format(new Date(active.booking.screening.starts_at))}`
+                ? `${active.booking.screening.hall.cinema.name} · ${date(active.booking.screening.starts_at, "full")}`
                 : t.tickets.title}
             </DialogDescription>
           </DialogHeader>
           {active && (
             <TicketQr
               data={{
-                title: active.booking?.screening?.movie.title ?? "Séance",
+                title: active.booking?.screening
+                  ? title(active.booking.screening.movie)
+                  : t.tickets.screening,
                 cinema: active.booking?.screening
                   ? `${active.booking.screening.hall.cinema.name} · ${active.booking.screening.hall.name}`
                   : "",
                 dateLabel: active.booking?.screening
-                  ? fmt.format(new Date(active.booking.screening.starts_at))
+                  ? date(active.booking.screening.starts_at, "full")
                   : "",
                 seats: seatLabels(active),
                 total: `${active.booking?.total_amount ?? 0} ${t.common.da}`,
@@ -228,6 +211,7 @@ function TicketsPage() {
 }
 
 function TicketItem({ tk, onOpen }: { tk: TicketRow; onOpen: () => void }) {
+  const { t, date, title } = useI18n();
   const s = tk.booking?.screening;
   const seats = seatLabels(tk);
   const state = ticketState(tk, Date.now());
@@ -235,13 +219,11 @@ function TicketItem({ tk, onOpen }: { tk: TicketRow; onOpen: () => void }) {
     <article className="rounded-2xl border border-border bg-card p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="truncate font-semibold">{s?.movie.title ?? "Séance"}</h2>
+          <h2 className="truncate font-semibold">{s ? title(s.movie) : t.tickets.screening}</h2>
           <p className="truncate text-xs text-muted-foreground">
             {s?.hall.cinema.name} · {s?.hall.name}
           </p>
-          {s && (
-            <p className="text-xs text-muted-foreground">{fmt.format(new Date(s.starts_at))}</p>
-          )}
+          {s && <p className="text-xs text-muted-foreground">{date(s.starts_at, "full")}</p>}
         </div>
         <Badge
           variant={
@@ -254,7 +236,7 @@ function TicketItem({ tk, onOpen }: { tk: TicketRow; onOpen: () => void }) {
                   : "outline"
           }
         >
-          {stateLabel[state]}
+          {stateLabel(t)[state]}
         </Badge>
       </div>
 

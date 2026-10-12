@@ -1,10 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { CheckCheck, Plus, X } from "lucide-react";
+import { CheckCheck, ImageUp, Plus, Trash2, X } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { BottomNav } from "@/components/BottomNav";
+import { MoviePoster } from "@/components/MoviePoster";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -34,60 +35,46 @@ import {
   removeStaff,
   revokeRole,
   setScreeningStatus,
+  uploadPoster,
   upsertMovie,
   type AppRole,
 } from "@/lib/api";
-import { t } from "@/lib/i18n";
+import { useI18n, type I18n } from "@/lib/i18n";
+import { pageHead } from "@/lib/i18n/meta";
+import { resizeImageToBase64 } from "@/lib/image";
 
 export const Route = createFileRoute("/admin")({
-  head: () => ({
-    meta: [
-      { title: "Espace administrateur — BookCinéDZ" },
-      {
-        name: "description",
-        content:
-          "Validez les programmes soumis, gérez le catalogue de films, les cinémas et les équipes.",
-      },
-      { name: "robots", content: "noindex" },
-    ],
-  }),
+  head: pageHead("admin", { noindex: true }),
   component: Admin,
-});
-
-const fmt = new Intl.DateTimeFormat("fr-FR", {
-  timeZone: "Africa/Algiers",
-  weekday: "short",
-  day: "numeric",
-  month: "short",
-  hour: "2-digit",
-  minute: "2-digit",
 });
 
 const grantableRoles: AppRole[] = ["contributeur", "agent_guichet", "admin"];
 
-// Exécute une action et affiche le résultat ou l'erreur.
-async function run(action: () => Promise<unknown>, success: string) {
-  try {
-    await action();
-    toast.success(success);
-    return true;
-  } catch (e) {
-    toast.error(e instanceof Error ? e.message : "Erreur");
-    return false;
-  }
+// Exécute une action et affiche le résultat ou l'erreur traduite.
+function useRun() {
+  const { error } = useI18n();
+  return async (action: () => Promise<unknown>, success: string) => {
+    try {
+      await action();
+      toast.success(success);
+      return true;
+    } catch (e) {
+      toast.error(error(e));
+      return false;
+    }
+  };
 }
 
 function Admin() {
   const { isAdmin, loading } = useAuth();
+  const { t } = useI18n();
 
   if (!loading && !isAdmin) {
     return (
       <div className="min-h-screen pb-24">
         <AppHeader />
         <main className="mx-auto max-w-3xl px-4 py-16 text-center">
-          <p className="text-sm text-muted-foreground">
-            Cet espace est réservé aux administrateurs.
-          </p>
+          <p className="text-sm text-muted-foreground">{t.common.restricted.admin}</p>
           <Button asChild className="mt-4 rounded-xl">
             <Link to="/compte">{t.nav.account}</Link>
           </Button>
@@ -106,10 +93,10 @@ function Admin() {
         {isAdmin && (
           <Tabs defaultValue="queue" className="mt-5">
             <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="queue">Validation</TabsTrigger>
-              <TabsTrigger value="movies">{t.admin.movies}</TabsTrigger>
-              <TabsTrigger value="venues">Lieux</TabsTrigger>
-              <TabsTrigger value="team">Équipe</TabsTrigger>
+              <TabsTrigger value="queue">{t.admin.tabs.queue}</TabsTrigger>
+              <TabsTrigger value="movies">{t.admin.tabs.movies}</TabsTrigger>
+              <TabsTrigger value="venues">{t.admin.tabs.venues}</TabsTrigger>
+              <TabsTrigger value="team">{t.admin.tabs.team}</TabsTrigger>
             </TabsList>
             <TabsContent value="queue" className="mt-4">
               <QueueTab />
@@ -157,6 +144,8 @@ function Field({
 /* ----------------------------------------------------------- Validation */
 
 function QueueTab() {
+  const { t, date, title } = useI18n();
+  const run = useRun();
   const queryClient = useQueryClient();
   const queue = useQuery({
     queryKey: ["screenings", "en_revue"],
@@ -174,7 +163,7 @@ function QueueTab() {
 
   return (
     <>
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <SectionTitle>{t.admin.queue}</SectionTitle>
         <Button
           size="sm"
@@ -196,10 +185,10 @@ function QueueTab() {
             className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-3"
           >
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{s.movie.title}</p>
+              <p className="truncate text-sm font-medium">{title(s.movie)}</p>
               <p className="text-xs text-muted-foreground">
-                {s.hall.cinema.name} · {s.hall.name} · {fmt.format(new Date(s.starts_at))} ·{" "}
-                {s.price} {t.common.da}
+                {s.hall.cinema.name} · {s.hall.name} · {date(s.starts_at, "medium")} · {s.price}{" "}
+                {t.common.da}
               </p>
             </div>
             <Button
@@ -222,20 +211,111 @@ function QueueTab() {
 const emptyMovie = {
   title: "",
   title_ar: "",
+  title_en: "",
   duration_minutes: "120",
   genre: "",
   synopsis: "",
+  synopsis_ar: "",
+  synopsis_en: "",
   poster_url: "",
   trailer_url: "",
   age_rating: "",
 };
+type MovieForm = typeof emptyMovie;
+
+function PosterField({
+  value,
+  onChange,
+  t,
+}: {
+  value: string;
+  onChange: (url: string) => void;
+  t: I18n["t"];
+}) {
+  const { error } = useI18n();
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const f = t.admin.movieForm;
+
+  async function upload(file: File) {
+    setBusy(true);
+    try {
+      const { url } = await uploadPoster({ data: await resizeImageToBase64(file) });
+      onChange(url);
+      toast.success(f.uploaded);
+    } catch (e) {
+      toast.error(error(e));
+    } finally {
+      setBusy(false);
+      if (input.current) input.current.value = "";
+    }
+  }
+
+  return (
+    <div className="flex gap-3">
+      <MoviePoster
+        src={value || null}
+        alt={f.poster}
+        className="h-28 w-20 shrink-0 rounded-lg border border-border"
+      />
+      <div className="min-w-0 flex-1 space-y-2">
+        <input
+          ref={input}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) void upload(file);
+          }}
+        />
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="rounded-xl"
+            disabled={busy}
+            onClick={() => input.current?.click()}
+          >
+            <ImageUp className="size-4" />
+            {busy ? f.uploading : f.upload}
+          </Button>
+          {value && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="rounded-xl text-muted-foreground"
+              onClick={() => onChange("")}
+            >
+              <Trash2 className="size-4" />
+              {f.removePoster}
+            </Button>
+          )}
+        </div>
+        <Input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={f.posterUrl}
+          aria-label={f.posterUrl}
+          dir="ltr"
+          className="rounded-xl text-xs"
+        />
+      </div>
+    </div>
+  );
+}
 
 function MoviesTab() {
+  const { t, title } = useI18n();
+  const run = useRun();
   const queryClient = useQueryClient();
   const movies = useQuery({ queryKey: ["movies"], queryFn: () => fetchMovies() });
-  const [form, setForm] = useState(emptyMovie);
+  const [form, setForm] = useState<MovieForm>(emptyMovie);
   const [editing, setEditing] = useState<string | null>(null);
-  const set = (k: keyof typeof emptyMovie) => (e: { target: { value: string } }) =>
+  const f = t.admin.movieForm;
+  const set = (k: keyof MovieForm) => (e: { target: { value: string } }) =>
     setForm({ ...form, [k]: e.target.value });
 
   async function save() {
@@ -245,34 +325,42 @@ function MoviesTab() {
         upsertMovie({
           data: {
             ...(editing ? { id: editing } : {}),
-            title: form.title,
-            title_ar: form.title_ar,
+            ...form,
             duration_minutes: Number(form.duration_minutes),
-            genre: form.genre,
-            synopsis: form.synopsis,
-            poster_url: form.poster_url,
-            trailer_url: form.trailer_url,
-            age_rating: form.age_rating,
           },
         }),
-      editing ? "Film modifié" : "Film ajouté",
+      editing ? f.saved : f.added,
     );
     if (ok) {
       setForm(emptyMovie);
       setEditing(null);
       await queryClient.invalidateQueries({ queryKey: ["movies"] });
+      await queryClient.invalidateQueries({ queryKey: ["screenings"] });
     }
   }
 
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-border bg-card p-4">
-        <SectionTitle>{editing ? "Modifier le film" : "Nouveau film"}</SectionTitle>
+        <SectionTitle>{editing ? f.edit : f.new}</SectionTitle>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <Field id="title" label="Titre">
-            <Input id="title" value={form.title} onChange={set("title")} className="rounded-xl" />
+          <Field label={f.poster} wide>
+            <PosterField
+              value={form.poster_url}
+              onChange={(url) => setForm((prev) => ({ ...prev, poster_url: url }))}
+              t={t}
+            />
           </Field>
-          <Field id="title_ar" label="Titre arabe">
+          <Field id="title" label={f.title}>
+            <Input
+              id="title"
+              dir="auto"
+              value={form.title}
+              onChange={set("title")}
+              className="rounded-xl"
+            />
+          </Field>
+          <Field id="title_ar" label={f.titleAr}>
             <Input
               id="title_ar"
               dir="rtl"
@@ -281,7 +369,16 @@ function MoviesTab() {
               className="rounded-xl"
             />
           </Field>
-          <Field id="dur" label="Durée (min)">
+          <Field id="title_en" label={f.titleEn}>
+            <Input
+              id="title_en"
+              dir="ltr"
+              value={form.title_en}
+              onChange={set("title_en")}
+              className="rounded-xl"
+            />
+          </Field>
+          <Field id="dur" label={f.duration}>
             <Input
               id="dur"
               type="number"
@@ -292,45 +389,57 @@ function MoviesTab() {
               className="rounded-xl"
             />
           </Field>
-          <Field id="genre" label="Genres">
+          <Field id="genre" label={f.genres}>
             <Input
               id="genre"
               value={form.genre}
               onChange={set("genre")}
-              placeholder="Drame, Comédie"
+              placeholder={f.genresHint}
               className="rounded-xl"
             />
           </Field>
-          <Field id="age" label="Classification">
+          <Field id="age" label={f.rating}>
             <Input
               id="age"
               value={form.age_rating}
               onChange={set("age_rating")}
-              placeholder="Tous publics"
+              placeholder={f.ratingHint}
               className="rounded-xl"
             />
           </Field>
-          <Field id="poster" label="Affiche (URL https)">
-            <Input
-              id="poster"
-              value={form.poster_url}
-              onChange={set("poster_url")}
-              className="rounded-xl"
-            />
-          </Field>
-          <Field id="trailer" label="Bande-annonce (URL YouTube)" wide>
+          <Field id="trailer" label={f.trailer} wide>
             <Input
               id="trailer"
+              dir="ltr"
               value={form.trailer_url}
               onChange={set("trailer_url")}
               className="rounded-xl"
             />
           </Field>
-          <Field id="syn" label="Synopsis" wide>
+          <Field id="syn" label={f.synopsis} wide>
             <Textarea
               id="syn"
+              dir="auto"
               value={form.synopsis}
               onChange={set("synopsis")}
+              className="rounded-xl"
+            />
+          </Field>
+          <Field id="syn_ar" label={f.synopsisAr} wide>
+            <Textarea
+              id="syn_ar"
+              dir="rtl"
+              value={form.synopsis_ar}
+              onChange={set("synopsis_ar")}
+              className="rounded-xl"
+            />
+          </Field>
+          <Field id="syn_en" label={f.synopsisEn} wide>
+            <Textarea
+              id="syn_en"
+              dir="ltr"
+              value={form.synopsis_en}
+              onChange={set("synopsis_en")}
               className="rounded-xl"
             />
           </Field>
@@ -361,11 +470,18 @@ function MoviesTab() {
             key={m.id}
             className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-3"
           >
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{m.title}</p>
-              <p className="text-xs text-muted-foreground">
-                {m.duration_minutes} {t.common.minutes} · {m.genre ?? "—"}
-              </p>
+            <div className="flex min-w-0 items-center gap-3">
+              <MoviePoster
+                src={m.poster_url}
+                alt={t.common.posterOf(title(m))}
+                className="h-12 w-9 shrink-0 rounded"
+              />
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">{title(m)}</p>
+                <p className="text-xs text-muted-foreground">
+                  {m.duration_minutes} {t.common.minutes} · {m.genre ?? "—"}
+                </p>
+              </div>
             </div>
             <Button
               size="sm"
@@ -376,9 +492,12 @@ function MoviesTab() {
                 setForm({
                   title: m.title,
                   title_ar: m.title_ar ?? "",
+                  title_en: m.title_en ?? "",
                   duration_minutes: String(m.duration_minutes),
                   genre: m.genre ?? "",
                   synopsis: m.synopsis ?? "",
+                  synopsis_ar: m.synopsis_ar ?? "",
+                  synopsis_en: m.synopsis_en ?? "",
                   poster_url: m.poster_url ?? "",
                   trailer_url: m.trailer_url ?? "",
                   age_rating: m.age_rating ?? "",
@@ -398,6 +517,9 @@ function MoviesTab() {
 /* ---------------------------------------------------------------- Lieux */
 
 function VenuesTab() {
+  const { t, city: cityName } = useI18n();
+  const run = useRun();
+  const v = t.admin.venues;
   const queryClient = useQueryClient();
   const cities = useQuery({ queryKey: ["cities"], queryFn: () => fetchCities() });
   const cinemas = useQuery({ queryKey: ["cinemas"], queryFn: () => fetchCinemas() });
@@ -423,22 +545,29 @@ function VenuesTab() {
       queryClient.invalidateQueries({ queryKey: ["cinemas"] }),
     ]);
 
+  async function loadDemo() {
+    if (!window.confirm(t.admin.demo.confirm)) return;
+    const ok = await run(async () => {
+      const { screeningsAdded } = await loadDemoData();
+      toast.info(t.admin.demo.added(screeningsAdded));
+    }, t.admin.demo.done);
+    if (ok) await queryClient.invalidateQueries();
+  }
+
   async function addCity() {
     if (!city.trim()) return;
-    if (await run(() => createCity({ data: city }), "Ville ajoutée")) {
+    if (await run(() => createCity({ data: city }), v.cityAdded)) {
       setCity("");
       await refresh();
     }
   }
 
   async function addCinema() {
-    if (!cinema.name.trim() || !cinema.city_id) {
-      return void toast.error("Nom et ville obligatoires");
-    }
+    if (!cinema.name.trim() || !cinema.city_id) return void toast.error(v.required);
     // Coordonnées au format « 36.7538, 3.0588 » (copiées depuis Google Maps).
-    const [lat, lng] = cinema.coords.split(",").map((v) => Number(v.trim()));
+    const [lat, lng] = cinema.coords.split(",").map((x) => Number(x.trim()));
     const hasCoords = cinema.coords.trim() !== "" && Number.isFinite(lat) && Number.isFinite(lng);
-    if (cinema.coords.trim() && !hasCoords) return void toast.error("Coordonnées invalides");
+    if (cinema.coords.trim() && !hasCoords) return void toast.error(v.badCoords);
     const ok = await run(
       () =>
         createCinema({
@@ -452,7 +581,7 @@ function VenuesTab() {
             longitude: hasCoords ? lng! : null,
           },
         }),
-      "Cinéma ajouté",
+      v.cinemaAdded,
     );
     if (ok) {
       setCinema({ name: "", city_id: "", address: "", phone: "", coords: "", description: "" });
@@ -461,7 +590,7 @@ function VenuesTab() {
   }
 
   async function addHall() {
-    if (!hall.cinema_id || !hall.name.trim()) return void toast.error("Cinéma et nom obligatoires");
+    if (!hall.cinema_id || !hall.name.trim()) return void toast.error(v.hallRequired);
     const ok = await run(
       () =>
         createHall({
@@ -472,7 +601,7 @@ function VenuesTab() {
             type: hall.type,
           },
         }),
-      "Salle ajoutée (plan de salle généré)",
+      v.hallAdded,
     );
     if (ok) {
       setHall({ ...hall, name: "" });
@@ -480,40 +609,28 @@ function VenuesTab() {
     }
   }
 
-  async function loadDemo() {
-    if (!window.confirm("Ajouter 3 villes, 7 cinémas, 11 films et une semaine de séances ?"))
-      return;
-    const ok = await run(async () => {
-      const { screeningsAdded } = await loadDemoData();
-      toast.info(`${screeningsAdded} séances ajoutées`);
-    }, "Données de démonstration chargées");
-    if (ok) await queryClient.invalidateQueries();
-  }
-
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-dashed border-border bg-card p-4">
-        <SectionTitle>Données de démonstration</SectionTitle>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Villes, cinémas (Alger, Oran, Constantine), films et une semaine de séances pour tester
-          l'application. Sans danger : rien n'est supprimé ni dupliqué.
-        </p>
+        <SectionTitle>{t.admin.demo.title}</SectionTitle>
+        <p className="mt-1 text-xs text-muted-foreground">{t.admin.demo.text}</p>
         <Button
           variant="outline"
           className="mt-3 w-full rounded-xl"
           onClick={() => void loadDemo()}
         >
-          Charger les données de démonstration
+          {t.admin.demo.button}
         </Button>
       </div>
 
       <div className="rounded-2xl border border-border bg-card p-4">
-        <SectionTitle>Nouvelle ville</SectionTitle>
+        <SectionTitle>{v.newCity}</SectionTitle>
         <div className="mt-3 flex gap-2">
           <Input
             value={city}
             onChange={(e) => setCity(e.target.value)}
-            placeholder="Annaba"
+            placeholder={v.cityHint}
+            aria-label={v.newCity}
             className="rounded-xl"
           />
           <Button className="rounded-xl" onClick={() => void addCity()}>
@@ -523,9 +640,9 @@ function VenuesTab() {
       </div>
 
       <div className="rounded-2xl border border-border bg-card p-4">
-        <SectionTitle>Nouveau cinéma</SectionTitle>
+        <SectionTitle>{v.newCinema}</SectionTitle>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <Field id="cname" label="Nom">
+          <Field id="cname" label={v.name}>
             <Input
               id="cname"
               value={cinema.name}
@@ -533,24 +650,24 @@ function VenuesTab() {
               className="rounded-xl"
             />
           </Field>
-          <Field label="Ville">
+          <Field label={v.city}>
             <Select
               value={cinema.city_id}
-              onValueChange={(v) => setCinema({ ...cinema, city_id: v })}
+              onValueChange={(x) => setCinema({ ...cinema, city_id: x })}
             >
               <SelectTrigger className="rounded-xl">
-                <SelectValue placeholder="Choisir" />
+                <SelectValue placeholder={t.common.choose} />
               </SelectTrigger>
               <SelectContent>
                 {(cities.data ?? []).map((c) => (
                   <SelectItem key={c.id} value={c.id}>
-                    {c.name}
+                    {cityName(c)}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </Field>
-          <Field id="caddr" label="Adresse">
+          <Field id="caddr" label={v.address}>
             <Input
               id="caddr"
               value={cinema.address}
@@ -558,24 +675,26 @@ function VenuesTab() {
               className="rounded-xl"
             />
           </Field>
-          <Field id="cphone" label="Téléphone">
+          <Field id="cphone" label={v.phone}>
             <Input
               id="cphone"
+              dir="ltr"
               value={cinema.phone}
               onChange={(e) => setCinema({ ...cinema, phone: e.target.value })}
               className="rounded-xl"
             />
           </Field>
-          <Field id="ccoords" label="Coordonnées GPS (lat, lng)" wide>
+          <Field id="ccoords" label={v.coords} wide>
             <Input
               id="ccoords"
+              dir="ltr"
               value={cinema.coords}
               onChange={(e) => setCinema({ ...cinema, coords: e.target.value })}
               placeholder="36.7538, 3.0588"
               className="rounded-xl"
             />
           </Field>
-          <Field id="cdesc" label="Description" wide>
+          <Field id="cdesc" label={v.description} wide>
             <Textarea
               id="cdesc"
               value={cinema.description}
@@ -591,15 +710,15 @@ function VenuesTab() {
       </div>
 
       <div className="rounded-2xl border border-border bg-card p-4">
-        <SectionTitle>Nouvelle salle</SectionTitle>
+        <SectionTitle>{v.newHall}</SectionTitle>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <Field label="Cinéma">
+          <Field label={v.cinema}>
             <Select
               value={hall.cinema_id}
-              onValueChange={(v) => setHall({ ...hall, cinema_id: v })}
+              onValueChange={(x) => setHall({ ...hall, cinema_id: x })}
             >
               <SelectTrigger className="rounded-xl">
-                <SelectValue placeholder="Choisir" />
+                <SelectValue placeholder={t.common.choose} />
               </SelectTrigger>
               <SelectContent>
                 {(cinemas.data ?? []).map((c) => (
@@ -610,16 +729,16 @@ function VenuesTab() {
               </SelectContent>
             </Select>
           </Field>
-          <Field id="hname" label="Nom de la salle">
+          <Field id="hname" label={v.hallName}>
             <Input
               id="hname"
               value={hall.name}
               onChange={(e) => setHall({ ...hall, name: e.target.value })}
-              placeholder="Salle 1"
+              placeholder={v.hallHint}
               className="rounded-xl"
             />
           </Field>
-          <Field id="hcap" label="Places (rangées de 10)">
+          <Field id="hcap" label={v.capacity}>
             <Input
               id="hcap"
               type="number"
@@ -630,10 +749,10 @@ function VenuesTab() {
               className="rounded-xl"
             />
           </Field>
-          <Field label="Type">
+          <Field label={v.type}>
             <Select
               value={hall.type}
-              onValueChange={(v) => setHall({ ...hall, type: v as "standard" | "vip" })}
+              onValueChange={(x) => setHall({ ...hall, type: x as "standard" | "vip" })}
             >
               <SelectTrigger className="rounded-xl">
                 <SelectValue />
@@ -655,12 +774,13 @@ function VenuesTab() {
         {(cinemas.data ?? []).map((c) => (
           <div key={c.id} className="rounded-xl border border-border bg-card p-3">
             <p className="text-sm font-medium">
-              {c.name} <span className="text-muted-foreground">· {c.city?.name}</span>
+              {c.name}{" "}
+              <span className="text-muted-foreground">· {c.city ? cityName(c.city) : ""}</span>
             </p>
             <p className="text-xs text-muted-foreground">
               {c.halls.length
                 ? c.halls.map((h) => `${h.name} (${h.capacity})`).join(" · ")
-                : "Aucune salle"}
+                : v.noHall}
             </p>
           </div>
         ))}
@@ -672,6 +792,9 @@ function VenuesTab() {
 /* --------------------------------------------------------------- Équipe */
 
 function TeamTab() {
+  const { t } = useI18n();
+  const run = useRun();
+  const tm = t.admin.team;
   const queryClient = useQueryClient();
   const cinemas = useQuery({ queryKey: ["cinemas"], queryFn: () => fetchCinemas() });
   const team = useQuery({ queryKey: ["team"], queryFn: () => fetchTeam() });
@@ -689,7 +812,7 @@ function TeamTab() {
         assignRole({
           data: { email, role, ...(needsCinema && cinemaId ? { cinemaId } : {}) },
         }),
-      "Rôle attribué",
+      tm.granted,
     );
     if (ok) {
       setEmail("");
@@ -700,22 +823,21 @@ function TeamTab() {
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-border bg-card p-4">
-        <SectionTitle>Attribuer un rôle</SectionTitle>
-        <p className="mt-1 text-xs text-muted-foreground">
-          La personne doit d'abord créer son compte et confirmer son e-mail.
-        </p>
+        <SectionTitle>{tm.grant}</SectionTitle>
+        <p className="mt-1 text-xs text-muted-foreground">{tm.hint}</p>
         <div className="mt-3 space-y-3">
-          <Field id="remail" label="E-mail du compte">
+          <Field id="remail" label={tm.email}>
             <Input
               id="remail"
               type="email"
+              dir="ltr"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="rounded-xl"
             />
           </Field>
-          <Field label="Rôle">
-            <Select value={role} onValueChange={(v) => setRole(v as AppRole)}>
+          <Field label={tm.role}>
+            <Select value={role} onValueChange={(x) => setRole(x as AppRole)}>
               <SelectTrigger className="rounded-xl">
                 <SelectValue />
               </SelectTrigger>
@@ -729,10 +851,10 @@ function TeamTab() {
             </Select>
           </Field>
           {needsCinema && (
-            <Field label="Cinéma de rattachement">
+            <Field label={tm.cinema}>
               <Select value={cinemaId} onValueChange={setCinemaId}>
                 <SelectTrigger className="rounded-xl">
-                  <SelectValue placeholder="Choisir un cinéma" />
+                  <SelectValue placeholder={tm.chooseCinema} />
                 </SelectTrigger>
                 <SelectContent>
                   {(cinemas.data ?? []).map((c) => (
@@ -745,7 +867,7 @@ function TeamTab() {
             </Field>
           )}
           <Button className="w-full rounded-xl" onClick={() => void grant()}>
-            Attribuer
+            {tm.submit}
           </Button>
         </div>
       </div>
@@ -754,20 +876,19 @@ function TeamTab() {
         {team.isLoading && <Skeleton className="h-16 rounded-xl" />}
         {(team.data ?? []).map((m) => (
           <div key={m.id} className="rounded-xl border border-border bg-card p-3">
-            <p className="text-sm font-medium">{m.email}</p>
+            <p className="text-sm font-medium" dir="ltr">
+              {m.email}
+            </p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {m.roles.map((r) => (
                 <Badge key={r} variant="secondary" className="gap-1 rounded-full">
                   {t.roles[r]}
                   <button
                     type="button"
-                    aria-label={`Retirer le rôle ${t.roles[r]}`}
+                    aria-label={tm.removeRole(t.roles[r])}
                     onClick={async () => {
                       if (
-                        await run(
-                          () => revokeRole({ data: { userId: m.id, role: r } }),
-                          "Rôle retiré",
-                        )
+                        await run(() => revokeRole({ data: { userId: m.id, role: r } }), tm.revoked)
                       )
                         await refresh();
                     }}
@@ -781,12 +902,12 @@ function TeamTab() {
                   {c.name}
                   <button
                     type="button"
-                    aria-label={`Retirer de ${c.name}`}
+                    aria-label={tm.removeCinema(c.name)}
                     onClick={async () => {
                       if (
                         await run(
                           () => removeStaff({ data: { userId: m.id, cinemaId: c.id } }),
-                          "Rattachement retiré",
+                          tm.unlinked,
                         )
                       )
                         await refresh();

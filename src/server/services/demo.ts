@@ -2,15 +2,25 @@
 // 7 prochains jours. Idempotent : relancer ne crée pas de doublons, et le
 // programme n'est ajouté que s'il n'y a aucune séance publiée à venir.
 // Utilisé par le bouton de l'espace admin et par `bun run db:seed`.
-import { and, count, eq, gt } from "drizzle-orm";
+import { and, count, eq, gt, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { cinemas, cities, halls, movies, screenings, seats } from "../db/schema";
 import { seatLayout } from "./admin";
 
 const CITIES = [
-  { id: "11111111-1111-4111-8111-111111111101", name: "Alger" },
-  { id: "11111111-1111-4111-8111-111111111102", name: "Oran" },
-  { id: "11111111-1111-4111-8111-111111111103", name: "Constantine" },
+  {
+    id: "11111111-1111-4111-8111-111111111101",
+    name: "Alger",
+    name_ar: "الجزائر",
+    name_en: "Algiers",
+  },
+  { id: "11111111-1111-4111-8111-111111111102", name: "Oran", name_ar: "وهران", name_en: "Oran" },
+  {
+    id: "11111111-1111-4111-8111-111111111103",
+    name: "Constantine",
+    name_ar: "قسنطينة",
+    name_en: "Constantine",
+  },
 ];
 const [ALGER, ORAN, CONSTANTINE] = CITIES.map((c) => c.id) as [string, string, string];
 
@@ -180,6 +190,11 @@ const MOVIES = [
     id: "44444444-4444-4444-8444-444444444401",
     title: "Insidious : L'Invasion du lointain",
     title_ar: "إنسيديوس: الغزو البعيد",
+    title_en: "Insidious: The Further Invasion",
+    synopsis_ar:
+      "تواجه عائلة لامبرت اقتحاماً جديداً قادماً من «البعيد»، عالم روحي لا يعود منه أحد سالماً.",
+    synopsis_en:
+      "The Lambert family faces a new intrusion from the Further, a spirit realm no one returns from unscathed.",
     duration_minutes: 108,
     genre: "Horreur",
     age_rating: "-16",
@@ -190,6 +205,10 @@ const MOVIES = [
     id: "44444444-4444-4444-8444-444444444402",
     title: "Spider-Man : Brand New Day",
     title_ar: "الرجل العنكبوت: يوم جديد",
+    title_en: "Spider-Man: Brand New Day",
+    synopsis_ar: "يبدأ بيتر باركر من جديد في نيويورك نسيت اسمه، بين تهديدات جديدة وجراح قديمة.",
+    synopsis_en:
+      "Peter Parker starts over in a New York that has forgotten his name, facing new threats and old wounds.",
     duration_minutes: 132,
     genre: "Action",
     age_rating: "Tous publics",
@@ -200,6 +219,10 @@ const MOVIES = [
     id: "44444444-4444-4444-8444-444444444403",
     title: "Marius et le royaume des mers",
     title_ar: "ماريوس ومملكة البحار",
+    title_en: "Marius and the Kingdom of the Sea",
+    synopsis_ar: "يكتشف صياد شاب مملكة تحت البحر مهددة، ويصبح رغماً عنه أملها الأخير.",
+    synopsis_en:
+      "A young fisherman discovers an endangered undersea kingdom and becomes, despite himself, its last hope.",
     duration_minutes: 96,
     genre: "Animation",
     age_rating: "Tous publics",
@@ -210,6 +233,9 @@ const MOVIES = [
     id: "44444444-4444-4444-8444-444444444404",
     title: "Pat' Patrouille : Mission Dino",
     title_ar: "دورية المخالب: مهمة الديناصور",
+    title_en: "PAW Patrol: Dino Mission",
+    synopsis_ar: "تنطلق دورية المخالب في أثر ديناصورات هاربة من وادٍ منسي.",
+    synopsis_en: "The PAW Patrol tracks dinosaurs that escaped from a forgotten valley.",
     duration_minutes: 88,
     genre: "Animation",
     age_rating: "Tous publics",
@@ -219,6 +245,10 @@ const MOVIES = [
     id: "44444444-4444-4444-8444-444444444405",
     title: "La Fin d'Oak Street",
     title_ar: "نهاية شارع أوك",
+    title_en: "The End of Oak Street",
+    synopsis_ar: "يكافح آخر سكان شارع مهدد بالهدم للحفاظ على حيّهم حياً.",
+    synopsis_en:
+      "The last residents of a street slated for demolition fight to keep their neighbourhood alive.",
     duration_minutes: 114,
     genre: "Drame",
     age_rating: "-12",
@@ -229,6 +259,9 @@ const MOVIES = [
     id: "44444444-4444-4444-8444-444444444406",
     title: "Vaiana (live action)",
     title_ar: "فايانا",
+    title_en: "Moana (live action)",
+    synopsis_ar: "النسخة الحية من رحلة فايانا عبر المحيط الهادئ.",
+    synopsis_en: "The live-action adaptation of Moana's voyage across the Pacific.",
     duration_minutes: 124,
     genre: "Aventure",
     age_rating: "Tous publics",
@@ -238,6 +271,9 @@ const MOVIES = [
     id: "44444444-4444-4444-8444-444444444407",
     title: "Toy Story 5",
     title_ar: "حكاية لعبة 5",
+    title_en: "Toy Story 5",
+    synopsis_ar: "وودي وباز ورفاقهما في مواجهة جيل جديد من الألعاب المتصلة.",
+    synopsis_en: "Woody, Buzz and the gang face a new generation of connected toys.",
     duration_minutes: 100,
     genre: "Animation",
     age_rating: "Tous publics",
@@ -247,6 +283,10 @@ const MOVIES = [
     id: "44444444-4444-4444-8444-444444444408",
     title: "Backrooms",
     title_ar: "الغرف الخلفية",
+    title_en: "Backrooms",
+    synopsis_ar: "مراهقون عالقون في متاهة ممرات لا نهاية لها يبحثون عن مخرج قد لا يكون موجوداً.",
+    synopsis_en:
+      "Trapped in an endless maze of corridors, teenagers search for an exit that may not exist.",
     duration_minutes: 102,
     genre: "Horreur",
     age_rating: "-16",
@@ -257,6 +297,10 @@ const MOVIES = [
     id: "44444444-4444-4444-8444-444444444409",
     title: "Minions & Monsters",
     title_ar: "المينيونز والوحوش",
+    title_en: "Minions & Monsters",
+    synopsis_ar: "يتحالف المينيونز مع وحوش خرقاء لإنقاذ مدينتهم من عالم شديد الطموح.",
+    synopsis_en:
+      "The Minions team up with clumsy monsters to save their town from an overambitious scientist.",
     duration_minutes: 95,
     genre: "Animation",
     age_rating: "Tous publics",
@@ -267,6 +311,10 @@ const MOVIES = [
     id: "44444444-4444-4444-8444-444444444410",
     title: "Michael Jackson",
     title_ar: "مايكل جاكسون",
+    title_en: "Michael Jackson",
+    synopsis_ar: "مسيرة ملك البوب، من طفولته في غاري إلى أكبر مسارح العالم.",
+    synopsis_en:
+      "The journey of the King of Pop, from his childhood in Gary to the world's biggest stages.",
     duration_minutes: 140,
     genre: "Biopic",
     age_rating: "-12",
@@ -277,6 +325,10 @@ const MOVIES = [
     id: "44444444-4444-4444-8444-444444444411",
     title: "Poupiya",
     title_ar: "بوبية",
+    title_en: "Poupiya",
+    synopsis_ar: "كوميديا عائلية جزائرية مليئة بسوء التفاهم حول عرس يخرج عن السيطرة.",
+    synopsis_en:
+      "An Algerian family comedy full of mix-ups around a wedding that goes off the rails.",
     duration_minutes: 92,
     genre: "Comédie",
     age_rating: "Tous publics",
@@ -298,7 +350,17 @@ function algiersMidnight(now: Date) {
 
 export async function seedDemo(db: Db, now = new Date()) {
   return db.transaction(async (tx) => {
-    await tx.insert(cities).values(CITIES).onConflictDoNothing();
+    // Les traductions sont complétées si elles manquent, jamais écrasées.
+    await tx
+      .insert(cities)
+      .values(CITIES)
+      .onConflictDoUpdate({
+        target: cities.id,
+        set: {
+          name_ar: sql`coalesce(${cities.name_ar}, excluded.name_ar)`,
+          name_en: sql`coalesce(${cities.name_en}, excluded.name_en)`,
+        },
+      });
     await tx.insert(cinemas).values(CINEMAS).onConflictDoNothing();
     await tx.insert(halls).values(HALLS).onConflictDoNothing();
     for (const hall of HALLS) {
@@ -307,7 +369,18 @@ export async function seedDemo(db: Db, now = new Date()) {
         .values(seatLayout(hall.capacity, hall.type).map((s) => ({ ...s, hall_id: hall.id })))
         .onConflictDoNothing();
     }
-    await tx.insert(movies).values(MOVIES).onConflictDoNothing();
+    await tx
+      .insert(movies)
+      .values(MOVIES)
+      .onConflictDoUpdate({
+        target: movies.id,
+        set: {
+          title_ar: sql`coalesce(${movies.title_ar}, excluded.title_ar)`,
+          title_en: sql`coalesce(${movies.title_en}, excluded.title_en)`,
+          synopsis_ar: sql`coalesce(${movies.synopsis_ar}, excluded.synopsis_ar)`,
+          synopsis_en: sql`coalesce(${movies.synopsis_en}, excluded.synopsis_en)`,
+        },
+      });
 
     const [{ upcoming }] = (await tx
       .select({ upcoming: count() })

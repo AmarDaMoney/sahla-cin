@@ -18,37 +18,19 @@ import {
   startOnlinePayment,
 } from "@/lib/api";
 import { paymentMethods, type PaymentMethodId } from "@/lib/payments";
-import { t } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n";
+import { pageHead } from "@/lib/i18n/meta";
 
 export const Route = createFileRoute("/reserver/$screeningId")({
-  head: () => ({
-    meta: [
-      { title: "Réserver une séance — BookCinéDZ" },
-      {
-        name: "description",
-        content:
-          "Choisissez vos sièges sur le plan de salle, payez par CIB, BaridiMob ou Edahabia et recevez votre billet QR.",
-      },
-      { property: "og:title", content: "Réservation — BookCinéDZ" },
-      { property: "og:description", content: "Plan de salle, paiement et billet électronique." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-    ],
-  }),
+  head: pageHead("booking"),
   component: BookingPage,
 });
 
-const dateFmt = new Intl.DateTimeFormat("fr-FR", {
-  timeZone: "Africa/Algiers",
-  weekday: "long",
-  day: "numeric",
-  month: "long",
-  hour: "2-digit",
-  minute: "2-digit",
-});
+const MAX_SEATS = 6;
 
 function BookingPage() {
   const { screeningId } = Route.useParams();
+  const { t, date, title, error } = useI18n();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user, loading: authLoading } = useAuth();
@@ -89,9 +71,9 @@ function BookingPage() {
 
   function toggleSeat(id: string) {
     if (takenSet.has(id)) return;
-    setSelected((prev) =>
-      prev.includes(id) ? prev.filter((s) => s !== id) : prev.length >= 6 ? prev : [...prev, id],
-    );
+    if (selected.includes(id)) return setSelected(selected.filter((s) => s !== id));
+    if (selected.length >= MAX_SEATS) return void toast.info(t.booking.maxSeats(MAX_SEATS));
+    setSelected([...selected, id]);
   }
 
   async function confirm() {
@@ -123,7 +105,7 @@ function BookingPage() {
     } catch (e) {
       // Paiement échoué : on libère immédiatement les sièges.
       if (bookingId) await cancelPendingBooking({ data: bookingId }).catch(() => {});
-      toast.error(e instanceof Error ? e.message : "Erreur lors de la réservation");
+      toast.error(error(e));
       void taken.refetch();
       setSelected([]);
     } finally {
@@ -139,7 +121,7 @@ function BookingPage() {
             to="/"
             className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
           >
-            <ArrowLeft className="size-4" />
+            <ArrowLeft className="size-4 rtl:rotate-180" />
             {t.common.back}
           </Link>
         }
@@ -150,13 +132,13 @@ function BookingPage() {
         ) : (
           screening.data && (
             <div className="rounded-2xl border border-border bg-card p-4">
-              <h1 className="text-lg font-bold">{screening.data.movie.title}</h1>
+              <h1 className="text-lg font-bold">{title(screening.data.movie)}</h1>
               <p className="mt-1 text-sm text-muted-foreground">
                 {screening.data.hall.cinema.name} · {screening.data.hall.name} ·{" "}
                 {t.languages[screening.data.audio_language]}
               </p>
               <p className="text-sm text-muted-foreground">
-                {dateFmt.format(new Date(screening.data.starts_at))}
+                {date(screening.data.starts_at, "full")}
               </p>
             </div>
           )
@@ -174,7 +156,8 @@ function BookingPage() {
 
             {seats.isLoading && <Skeleton className="h-40 w-full" />}
 
-            <div className="space-y-1.5 overflow-x-auto">
+            {/* Plan de salle toujours de gauche à droite, comme dans la salle. */}
+            <div className="space-y-1.5 overflow-x-auto" dir="ltr">
               {rows.map(([label, rowSeats]) => (
                 <div key={label} className="flex items-center justify-center gap-1.5">
                   <span className="w-4 shrink-0 text-[10px] text-muted-foreground">{label}</span>
@@ -187,7 +170,7 @@ function BookingPage() {
                         type="button"
                         onClick={() => toggleSeat(s.id)}
                         disabled={isTaken}
-                        aria-label={`Siège ${s.row_label}${s.seat_number}${isTaken ? ` — ${t.booking.taken}` : ""}`}
+                        aria-label={`${t.booking.seat(`${s.row_label}${s.seat_number}`)}${isTaken ? ` — ${t.booking.taken}` : ""}`}
                         aria-pressed={isSel}
                         className={`size-6 shrink-0 rounded-md text-[9px] font-medium transition-colors ${
                           isTaken
@@ -207,10 +190,10 @@ function BookingPage() {
 
             <div className="mt-5 flex justify-center gap-4 text-[11px] text-muted-foreground">
               <span className="flex items-center gap-1.5">
-                <span className="size-3 rounded bg-secondary" /> Libre
+                <span className="size-3 rounded bg-secondary" /> {t.booking.free}
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="size-3 rounded bg-primary" /> Sélectionné
+                <span className="size-3 rounded bg-primary" /> {t.booking.selectedSeat}
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="size-3 rounded bg-muted/40" /> {t.booking.taken}
@@ -220,24 +203,26 @@ function BookingPage() {
         </section>
 
         <section className="mt-6">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-primary">Paiement</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-primary">
+            {t.booking.payment}
+          </h2>
           <div className="mt-3 space-y-2">
-            {paymentMethods.map((p) => (
+            {paymentMethods.map((id) => (
               <button
-                key={p.id}
+                key={id}
                 type="button"
-                onClick={() => setMethod(p.id)}
-                className={`flex w-full items-center justify-between rounded-xl border p-3 text-left transition-colors ${
-                  method === p.id
+                onClick={() => setMethod(id)}
+                className={`flex w-full items-center justify-between rounded-xl border p-3 text-start transition-colors ${
+                  method === id
                     ? "border-primary bg-primary/10"
                     : "border-border bg-card hover:border-primary/40"
                 }`}
               >
                 <span>
-                  <span className="block text-sm font-medium">{p.label}</span>
-                  <span className="block text-xs text-muted-foreground">{p.hint}</span>
+                  <span className="block text-sm font-medium">{t.payments[id].label}</span>
+                  <span className="block text-xs text-muted-foreground">{t.payments[id].hint}</span>
                 </span>
-                {method === p.id && <CheckCircle2 className="size-5 text-primary" />}
+                {method === id && <CheckCircle2 className="size-5 text-primary" />}
               </button>
             ))}
           </div>

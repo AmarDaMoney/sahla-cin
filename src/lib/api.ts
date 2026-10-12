@@ -7,16 +7,19 @@
 //  - toute donnée privée passe par requireUser / requireRole ;
 //  - la logique métier vit dans src/server/services (testée dans tests/).
 import { createServerFn } from "@tanstack/react-start";
+import { getRequestHeaders } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { requireRole, requireUser, withViewer } from "@/lib/middleware";
 import type { PaymentStart } from "@/lib/payments";
 import { AppError } from "@/lib/errors";
+import { langFromHeaders } from "@/lib/i18n/lang";
 import { envValue } from "@/server/config";
 import { serialize, type Serialized } from "@/server/serialize";
 import * as admin from "@/server/services/admin";
 import * as booking from "@/server/services/booking";
 import * as catalog from "@/server/services/catalog";
 import { seedDemo } from "@/server/services/demo";
+import * as media from "@/server/services/media";
 import { notifyBooking } from "@/server/services/notifications";
 import * as programme from "@/server/services/programme";
 import { scanTicket as scan } from "@/server/services/scan";
@@ -48,12 +51,24 @@ const httpUrl = z
   .refine((v) => /^https?:\/\//.test(v), "URL http(s) attendue")
   .nullable()
   .or(z.literal("").transform(() => null));
+// Affiche : URL externe, ou image envoyée sur le site (/api/media/<id>).
+const posterUrl = z
+  .string()
+  .trim()
+  .regex(/^\/api\/media\/[0-9a-f-]{36}$/)
+  .or(httpUrl)
+  .nullable();
 
 /* ------------------------------------------------------------ Session */
 
 export const getMe = createServerFn({ method: "GET" })
   .middleware([withViewer])
   .handler(async ({ context }) => context.viewer);
+
+const requestLang = () => langFromHeaders(new Headers(getRequestHeaders()));
+
+// Langue de l'interface (cookie « lang », sinon préférence du navigateur).
+export const fetchLang = createServerFn({ method: "GET" }).handler(async () => requestLang());
 
 // Options de connexion disponibles (Google seulement si configuré).
 export const fetchAuthOptions = createServerFn({ method: "GET" }).handler(async () => ({
@@ -121,7 +136,7 @@ export const createBooking = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const result = await booking.bookSeats(context.db, context.viewer.id, data);
     // Paiement en ligne : l'e-mail part après confirmation du paiement.
-    if (data.paymentMethod === "espece") notifyBooking(context.db, result.bookingId);
+    if (data.paymentMethod === "espece") notifyBooking(context.db, result.bookingId, requestLang());
     return serialize(result);
   });
 
@@ -146,7 +161,7 @@ export const startOnlinePayment = createServerFn({ method: "POST" })
   .inputValidator(id)
   .handler(async ({ data, context }): Promise<PaymentStart> => {
     const b = await booking.getOwnBooking(context.db, context.viewer.id, data);
-    if (!b) throw new AppError("NOT_FOUND", "Réservation introuvable");
+    if (!b) throw new AppError("BOOKING_NOT_FOUND", "Réservation introuvable");
     if (b.status === "confirme") return { status: "confirmed" };
     if (b.status !== "en_attente_paiement" || b.payment_method === "espece") {
       throw new AppError("NOT_PAYABLE", "Cette réservation ne peut pas être payée en ligne");
@@ -165,7 +180,7 @@ export const startOnlinePayment = createServerFn({ method: "POST" })
     if (result !== "confirmed" && result !== "already_confirmed") {
       throw new AppError("PAYMENT_REFUSED", "Paiement refusé : la réservation a expiré");
     }
-    if (result === "confirmed") notifyBooking(context.db, b.id);
+    if (result === "confirmed") notifyBooking(context.db, b.id, requestLang());
     return { status: "confirmed" };
   });
 
@@ -250,10 +265,13 @@ export const upsertMovie = createServerFn({ method: "POST" })
       id: id.optional(),
       title: z.string().trim().min(1).max(200),
       title_ar: optionalText(200),
+      title_en: optionalText(200),
       duration_minutes: z.number().int().min(1).max(600),
       genre: optionalText(100),
       synopsis: optionalText(4000),
-      poster_url: httpUrl,
+      synopsis_ar: optionalText(4000),
+      synopsis_en: optionalText(4000),
+      poster_url: posterUrl,
       trailer_url: httpUrl,
       age_rating: optionalText(40),
     }),
@@ -292,6 +310,12 @@ export const createHall = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => admin.createHall(context.db, data));
 
+export const uploadPoster = createServerFn({ method: "POST" })
+  .middleware([adminOnly])
+  // Base64 d'une image de 3 Mo maximum (redimensionnée dans le navigateur).
+  .inputValidator(z.string().min(1).max(4_100_000))
+  .handler(async ({ data, context }) => media.saveImage(context.db, context.viewer.id, data));
+
 export const fetchTeam = createServerFn({ method: "GET" })
   .middleware([adminOnly])
   .handler(async ({ context }) => admin.listTeam(context.db));
@@ -308,7 +332,7 @@ export const revokeRole = createServerFn({ method: "POST" })
   .inputValidator(z.object({ userId: id, role: appRole }))
   .handler(async ({ data, context }) => {
     if (data.userId === context.viewer.id && data.role === "admin") {
-      throw new AppError("FORBIDDEN", "Vous ne pouvez pas retirer votre propre rôle admin");
+      throw new AppError("OWN_ADMIN_ROLE", "Vous ne pouvez pas retirer votre propre rôle admin");
     }
     return admin.revokeRole(context.db, data);
   });

@@ -1,51 +1,27 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Clock } from "lucide-react";
+import { ArrowLeft, Clock, PlayCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BottomNav } from "@/components/BottomNav";
 import { MoviePoster } from "@/components/MoviePoster";
 import { fetchMovie, fetchPublishedScreenings } from "@/lib/api";
-import { t } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n";
+import { pageHead } from "@/lib/i18n/meta";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 export const Route = createFileRoute("/film/$movieId")({
-  head: () => ({
-    meta: [
-      { title: "Séances et réservation du film — BookCinéDZ" },
-      {
-        name: "description",
-        content:
-          "Synopsis, durée, genres et séances par cinéma. Réservez vos places de cinéma en Algérie en quelques secondes.",
-      },
-      { property: "og:title", content: "Fiche film — BookCinéDZ" },
-      {
-        property: "og:description",
-        content: "Toutes les séances publiées de ce film dans les cinémas algériens.",
-      },
-      { property: "og:type", content: "video.movie" },
-      { name: "twitter:card", content: "summary_large_image" },
-    ],
-  }),
+  head: pageHead("movie"),
   component: MoviePage,
 });
 
-const dayFmt = new Intl.DateTimeFormat("fr-FR", {
-  timeZone: "Africa/Algiers",
-  weekday: "long",
-  day: "numeric",
-  month: "long",
-});
 // Jour calendaire à Alger (AAAA-MM-JJ), pour regrouper les séances.
 const dayKey = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Algiers" });
-const timeFmt = new Intl.DateTimeFormat("fr-FR", {
-  timeZone: "Africa/Algiers",
-  hour: "2-digit",
-  minute: "2-digit",
-});
 
 function MoviePage() {
   const { movieId } = Route.useParams();
+  const { t, date, title, subtitle, synopsis, city, genres, rating } = useI18n();
   const movie = useQuery({
     queryKey: ["movie", movieId],
     queryFn: () => fetchMovie({ data: movieId }),
@@ -70,24 +46,36 @@ function MoviePage() {
       <div className="relative">
         <MoviePoster
           src={movie.data?.poster_url ?? null}
-          alt={`Affiche du film ${movie.data?.title ?? ""}`}
+          alt={movie.data ? t.common.posterOf(title(movie.data)) : ""}
           className="h-[46vh] max-h-[400px] w-full"
         />
         <div className="poster-fade absolute inset-0" />
         <Link
           to="/"
           aria-label={t.common.back}
-          className="absolute left-4 top-4 flex size-10 items-center justify-center rounded-full bg-background/70 backdrop-blur transition-colors hover:bg-background"
+          className="absolute start-4 top-4 flex size-10 items-center justify-center rounded-full bg-background/70 backdrop-blur transition-colors hover:bg-background"
         >
-          <ArrowLeft className="size-5" />
+          <ArrowLeft className="size-5 rtl:rotate-180" />
         </Link>
+        <div className="absolute end-4 top-4">
+          <LanguageSwitcher />
+        </div>
       </div>
 
       <main className="relative z-10 mx-auto -mt-12 max-w-3xl px-4">
         {movie.isLoading ? (
           <Skeleton className="h-8 w-2/3" />
         ) : (
-          <h1 className="text-2xl font-bold leading-tight">{movie.data?.title}</h1>
+          <>
+            <h1 className="text-2xl font-bold leading-tight">
+              {movie.data ? title(movie.data) : ""}
+            </h1>
+            {movie.data && subtitle(movie.data) && (
+              <p dir="auto" className="mt-1 text-muted-foreground">
+                {subtitle(movie.data)}
+              </p>
+            )}
+          </>
         )}
 
         <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
@@ -95,25 +83,34 @@ function MoviePage() {
             <Clock className="size-4" />
             {movie.data?.duration_minutes} {t.common.minutes}
           </span>
-          {movie.data?.age_rating && <Badge variant="secondary">{movie.data.age_rating}</Badge>}
-          {(movie.data?.genre ?? "")
-            .split(",")
-            .map((g) => g.trim())
-            .filter(Boolean)
-            .map((g) => (
-              <Badge key={g} variant="secondary" className="rounded-full font-normal">
-                {g}
-              </Badge>
-            ))}
+          {movie.data?.age_rating && (
+            <Badge variant="secondary">{rating(movie.data.age_rating)}</Badge>
+          )}
+          {genres(movie.data?.genre ?? null).map((g) => (
+            <Badge key={g.key} variant="secondary" className="rounded-full font-normal">
+              {g.label}
+            </Badge>
+          ))}
+          {movie.data?.trailer_url && (
+            <a
+              href={movie.data.trailer_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-primary underline-offset-4 hover:underline"
+            >
+              <PlayCircle className="size-4" />
+              {t.movie.trailer}
+            </a>
+          )}
         </div>
 
-        {movie.data?.synopsis && (
+        {movie.data && synopsis(movie.data) && (
           <section className="mt-6">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-primary">
               {t.movie.synopsis}
             </h2>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              {movie.data.synopsis}
+            <p dir="auto" className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              {synopsis(movie.data)}
             </p>
           </section>
         )}
@@ -137,7 +134,8 @@ function MoviePage() {
                     <div>
                       <h3 className="font-semibold">{first.hall.cinema.name}</h3>
                       <p className="text-xs text-muted-foreground">
-                        {first.hall.cinema.city?.name} · {dayFmt.format(new Date(first.starts_at))}
+                        {first.hall.cinema.city ? city(first.hall.cinema.city) : ""} ·{" "}
+                        {date(first.starts_at, "day")}
                       </p>
                     </div>
                     <Link
@@ -160,7 +158,7 @@ function MoviePage() {
                         >
                           <Link to="/reserver/$screeningId" params={{ screeningId: s.id }}>
                             <span className="text-sm font-semibold">
-                              {timeFmt.format(new Date(s.starts_at))}
+                              {date(s.starts_at, "time")}
                             </span>
                             <span className="text-[10px] opacity-80">
                               {t.languages[s.audio_language]} · {s.hall.name} · {s.price}{" "}

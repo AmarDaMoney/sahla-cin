@@ -8,7 +8,12 @@ import { hasRole, isAdmin, type Viewer } from "../viewer";
 export type ScanOutcome =
   "ok" | "used" | "invalid" | "unpaid" | "cancelled" | "wrong_cinema" | "too_early" | "expired";
 
-export type ScanResult = { outcome: ScanOutcome; info: string | null; amount: number | null };
+export type ScanResult = {
+  outcome: ScanOutcome;
+  info: string | null;
+  amount: number | null;
+  scannedAt?: string | null;
+};
 
 const EARLY_ENTRY = 3 * 60 * 60_000; // contrôle possible 3 h avant la séance
 
@@ -30,7 +35,7 @@ export async function scanTicket(
 ): Promise<ScanResult> {
   const admin = isAdmin(viewer);
   if (!admin && !hasRole(viewer, "agent_guichet")) {
-    throw new AppError("FORBIDDEN", "Réservé aux agents de guichet");
+    throw new AppError("NOT_AGENT", "Réservé aux agents de guichet");
   }
 
   return db.transaction(async (tx) => {
@@ -72,8 +77,12 @@ export async function scanTicket(
 
     if (booking.status === "annule") return { outcome: "cancelled", info: label, amount: null };
     if (ticket.scanned) {
-      const at = ticket.scanned_at ? ` — scanné le ${algiers.format(ticket.scanned_at)}` : "";
-      return { outcome: "used", info: label + at, amount: null };
+      return {
+        outcome: "used",
+        info: label,
+        amount: null,
+        scannedAt: ticket.scanned_at?.toISOString() ?? null,
+      };
     }
     if (now.getTime() < start - EARLY_ENTRY)
       return { outcome: "too_early", info: label, amount: null };

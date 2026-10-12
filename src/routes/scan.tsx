@@ -8,29 +8,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
 import { scanTicket, type ScanResult } from "@/lib/api";
-import { t } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n";
+import { pageHead } from "@/lib/i18n/meta";
 
 export const Route = createFileRoute("/scan")({
-  head: () => ({
-    meta: [
-      { title: "Contrôle des billets — BookCinéDZ" },
-      {
-        name: "description",
-        content:
-          "Mode agent guichet : scannez les QR codes des billets et refusez les billets déjà utilisés.",
-      },
-      { property: "og:title", content: "Contrôle des billets — BookCinéDZ" },
-      { property: "og:description", content: "Scanner de billets pour les agents de guichet." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-      { name: "robots", content: "noindex" },
-    ],
-  }),
+  head: pageHead("scan", { noindex: true }),
   component: ScanPage,
 });
 
 function ScanPage() {
   const { isAgent, loading } = useAuth();
+  const { t, date, error } = useI18n();
   const [code, setCode] = useState("");
   const [result, setResult] = useState<ScanResult | null>(null);
   const [lastCode, setLastCode] = useState("");
@@ -45,7 +33,7 @@ function ScanPage() {
       setLastCode(value);
       setResult(await scanTicket({ data: { code: value, collectCash: false } }));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erreur de contrôle");
+      toast.error(error(e));
       setResult(null);
     } finally {
       setTimeout(() => (busyRef.current = false), 1200);
@@ -56,7 +44,7 @@ function ScanPage() {
     try {
       setResult(await scanTicket({ data: { code: lastCode, collectCash: true } }));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erreur d'encaissement");
+      toast.error(error(e));
     }
   }
 
@@ -95,9 +83,7 @@ function ScanPage() {
       <div className="min-h-screen pb-24">
         <AppHeader />
         <main className="mx-auto max-w-3xl px-4 py-16 text-center">
-          <p className="text-sm text-muted-foreground">
-            Cet espace est réservé aux agents de guichet.
-          </p>
+          <p className="text-sm text-muted-foreground">{t.common.restricted.agent}</p>
           <Button asChild className="mt-4 rounded-xl">
             <Link to="/compte">{t.nav.account}</Link>
           </Button>
@@ -164,7 +150,12 @@ function ScanPage() {
               )}
               <div>
                 <p className="font-semibold">{t.scan[result.outcome]}</p>
-                {result.info && <p className="text-xs text-muted-foreground">{result.info}</p>}
+                {result.info && (
+                  <p className="text-xs text-muted-foreground">
+                    {result.info}
+                    {result.scannedAt && ` — ${t.scan.scannedAt(date(result.scannedAt, "medium"))}`}
+                  </p>
+                )}
               </div>
             </div>
             {result.outcome === "unpaid" && (

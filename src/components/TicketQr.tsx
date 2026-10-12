@@ -4,16 +4,22 @@ import { Download, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { buildTicketBlob, type TicketImageData } from "@/lib/ticket-image";
-import { t } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n";
 
 export function TicketQr({ data, size = 176 }: { data: TicketImageData; size?: number }) {
   const wrapper = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState(false);
+  const { t, dir, error } = useI18n();
 
   async function makeBlob() {
     const canvas = wrapper.current?.querySelector("canvas");
-    if (!canvas) throw new Error("QR code indisponible");
-    return await buildTicketBlob(canvas as HTMLCanvasElement, data);
+    if (!canvas) throw new Error(t.common.error);
+    return await buildTicketBlob(canvas as HTMLCanvasElement, data, {
+      ...t.tickets.image,
+      reference: t.tickets.ref,
+      appName: t.appName,
+      rtl: dir === "rtl",
+    });
   }
 
   async function download() {
@@ -23,12 +29,12 @@ export function TicketQr({ data, size = 176 }: { data: TicketImageData; size?: n
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `billet-${data.reference}.png`;
+      a.download = `${t.tickets.image.fileName}-${data.reference}.png`;
       a.click();
       URL.revokeObjectURL(url);
       toast.success(t.tickets.downloaded);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erreur");
+      toast.error(error(e));
     } finally {
       setBusy(false);
     }
@@ -38,7 +44,9 @@ export function TicketQr({ data, size = 176 }: { data: TicketImageData; size?: n
     setBusy(true);
     try {
       const blob = await makeBlob();
-      const file = new File([blob], `billet-${data.reference}.png`, { type: "image/png" });
+      const file = new File([blob], `${t.tickets.image.fileName}-${data.reference}.png`, {
+        type: "image/png",
+      });
       const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
       if (nav.canShare?.({ files: [file] })) {
         await nav.share({
@@ -49,17 +57,17 @@ export function TicketQr({ data, size = 176 }: { data: TicketImageData; size?: n
       } else if (navigator.share) {
         await navigator.share({
           title: `${t.appName} — ${data.title}`,
-          text: `${data.title} · ${data.cinema} · ${data.dateLabel} — Réf. ${data.reference}`,
+          text: `${data.title} · ${data.cinema} · ${data.dateLabel} — ${t.tickets.ref} ${data.reference}`,
         });
       } else {
         await navigator.clipboard.writeText(
-          `${data.title} · ${data.cinema} · ${data.dateLabel} — Réf. ${data.reference}`,
+          `${data.title} · ${data.cinema} · ${data.dateLabel} — ${t.tickets.ref} ${data.reference}`,
         );
         toast.success(t.tickets.copied);
       }
     } catch (e) {
       if ((e as Error)?.name !== "AbortError") {
-        toast.error(e instanceof Error ? e.message : "Erreur");
+        toast.error(error(e));
       }
     } finally {
       setBusy(false);

@@ -1,4 +1,6 @@
+import { dirOf, type Lang } from "@/lib/i18n/lang";
 import { envValue, isExampleValue } from "./config";
+import { EMAIL_TEXTS } from "./email-texts";
 
 // Envoi d'e-mails via l'API HTTP de Resend (Railway bloque le SMTP sortant
 // sur certaines offres ; une API HTTP fonctionne partout).
@@ -59,18 +61,22 @@ export function actionEmail(opts: {
   intro: string;
   action: string;
   url: string;
+  lang?: Lang;
 }): Email {
+  const lang = opts.lang ?? "fr";
+  const ignore = EMAIL_TEXTS[lang].ignore;
+  const dir = dirOf(lang);
   const intro = escapeHtml(opts.intro);
   const url = escapeHtml(opts.url);
   return {
     to: opts.to,
     subject: opts.subject,
-    text: `${opts.intro}\n\n${opts.action} : ${opts.url}\n\nSi vous n'êtes pas à l'origine de cette demande, ignorez ce message.`,
-    html: `<div style="font-family:system-ui,sans-serif;max-width:480px;margin:auto;padding:24px;color:#0f172a">
+    text: `${opts.intro}\n\n${opts.action} : ${opts.url}\n\n${ignore}`,
+    html: `<div dir="${dir}" lang="${lang}" style="font-family:system-ui,sans-serif;max-width:480px;margin:auto;padding:24px;color:#0f172a">
   <h1 style="font-size:20px;color:#dc2626">BookCinéDZ</h1>
   <p style="font-size:15px;line-height:1.5">${intro}</p>
   <p style="margin:28px 0"><a href="${url}" style="background:#dc2626;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:600">${escapeHtml(opts.action)}</a></p>
-  <p style="font-size:12px;color:#64748b">Si vous n'êtes pas à l'origine de cette demande, ignorez ce message.</p>
+  <p style="font-size:12px;color:#64748b">${escapeHtml(ignore)}</p>
 </div>`,
   };
 }

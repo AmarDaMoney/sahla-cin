@@ -18,7 +18,7 @@ const screeningWith = {
           longitude: true,
           city_id: true,
         },
-        with: { city: { columns: { id: true, name: true } } },
+        with: { city: { columns: { id: true, name: true, name_ar: true, name_en: true } } },
       },
     },
   },
@@ -32,7 +32,7 @@ export function listCinemas(db: Db) {
   return db.query.cinemas.findMany({
     orderBy: (c, { asc }) => asc(c.name),
     with: {
-      city: { columns: { id: true, name: true } },
+      city: { columns: { id: true, name: true, name_ar: true, name_en: true } },
       halls: { columns: { id: true, name: true, type: true, capacity: true } },
     },
   });
@@ -43,7 +43,7 @@ export async function getCinema(db: Db, id: string) {
     (await db.query.cinemas.findFirst({
       where: (c, { eq }) => eq(c.id, id),
       with: {
-        city: { columns: { id: true, name: true } },
+        city: { columns: { id: true, name: true, name_ar: true, name_en: true } },
         halls: { columns: { id: true, name: true, type: true, capacity: true } },
       },
     })) ?? null

@@ -10,26 +10,14 @@ import { ME_QUERY_KEY } from "@/hooks/useAuth";
 import { fetchAuthOptions } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import { authErrorMessage } from "@/lib/auth-errors";
-import { t } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n";
+import { pageHead } from "@/lib/i18n/meta";
 
 export const Route = createFileRoute("/auth")({
   validateSearch: (search: Record<string, unknown>) => ({
     redirect: typeof search["redirect"] === "string" ? (search["redirect"] as string) : "/",
   }),
-  head: () => ({
-    meta: [
-      { title: "Connexion — BookCinéDZ" },
-      {
-        name: "description",
-        content: "Connectez-vous pour réserver vos places de cinéma et retrouver vos billets.",
-      },
-      { property: "og:title", content: "Connexion — BookCinéDZ" },
-      { property: "og:description", content: "Accédez à votre compte BookCinéDZ." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-      { name: "robots", content: "noindex" },
-    ],
-  }),
+  head: pageHead("auth", { noindex: true }),
   component: AuthPage,
 });
 
@@ -42,6 +30,7 @@ type Mode = "login" | "signup" | "forgot";
 
 function AuthPage() {
   const { redirect } = Route.useSearch();
+  const { t, lang } = useI18n();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const options = useQuery({ queryKey: ["auth-options"], queryFn: () => fetchAuthOptions() });
@@ -62,7 +51,7 @@ function AuthPage() {
     try {
       if (mode === "signup") {
         const { error } = await authClient.signUp.email({ email, password, name, callbackURL });
-        if (error) return void toast.error(authErrorMessage(error));
+        if (error) return void toast.error(authErrorMessage(error, lang));
         toast.success(t.auth.checkInbox, { duration: 10_000 });
         setMode("login");
         setPassword("");
@@ -71,7 +60,7 @@ function AuthPage() {
           email,
           redirectTo: "/reinitialiser",
         });
-        if (error && error.status === 429) return void toast.error(authErrorMessage(error));
+        if (error && error.status === 429) return void toast.error(authErrorMessage(error, lang));
         // Même message que le compte existe ou non (pas de fuite d'information).
         toast.success(t.auth.linkSent, { duration: 10_000 });
         setMode("login");
@@ -79,7 +68,7 @@ function AuthPage() {
         const { error } = await authClient.signIn.email({ email, password });
         if (error) {
           if (error.code === "EMAIL_NOT_VERIFIED") setUnverified(true);
-          return void toast.error(authErrorMessage(error));
+          return void toast.error(authErrorMessage(error, lang));
         }
         await queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY });
         navigate({ to: target });
@@ -91,13 +80,13 @@ function AuthPage() {
 
   async function resendVerification() {
     const { error } = await authClient.sendVerificationEmail({ email, callbackURL });
-    if (error) toast.error(authErrorMessage(error));
+    if (error) toast.error(authErrorMessage(error, lang));
     else toast.success(t.auth.resent);
   }
 
   async function google() {
     const { error } = await authClient.signIn.social({ provider: "google", callbackURL });
-    if (error) toast.error(authErrorMessage(error));
+    if (error) toast.error(authErrorMessage(error, lang));
   }
 
   const title = mode === "forgot" ? t.auth.forgotTitle : t.auth.title;

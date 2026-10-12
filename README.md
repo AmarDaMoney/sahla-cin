@@ -46,11 +46,23 @@ database. Emails go through **Resend**.
 
 Every push to `main` redeploys automatically.
 
+## Languages
+
+French, Arabic (right-to-left) and English, chosen with the language button in
+the header (remembered in a cookie; first visit follows the browser). All
+texts live in `src/lib/i18n/{fr,ar,en}.ts` — TypeScript and the tests make sure
+every language has every key. Films have a title and synopsis per language;
+when a translation is missing the French one is shown. Emails go out in the
+language the person was using.
+
 ## Day-to-day (admin page)
 
 - **Lieux**: add cities, cinemas (paste GPS coordinates from Google Maps) and
   screens; the seat map (rows of 10) is created automatically.
-- **Films**: add or edit films (poster and trailer URLs).
+- **Films**: add or edit films, with titles and synopses in French, Arabic
+  and English. **Upload the poster** directly (it is resized in the browser and
+  stored in the database, so it is backed up with everything else), or paste
+  an image URL.
 - **Équipe**: give a role to an existing account by email. Contributors (enter
   a cinema's programme) and counter agents (scan tickets) must be attached to
   their cinema; they only see and act on that cinema.
@@ -82,8 +94,10 @@ bank, Chargily Pay, Slick Pay…), then a developer:
 - The scanner rejects cancelled, used, unpaid, too early, finished and
   other-cinema tickets.
 - Accounts: verified email required, passwords ≥ 8 characters (hashed),
-  login attempts rate-limited, sessions in httpOnly cookies, security headers
-  on every page.
+  login attempts rate-limited per visitor (`/api/health` → `rateLimit` must say
+  "par visiteur"), sessions in httpOnly cookies, security headers on every page.
+- Uploaded images are checked by content (JPEG/PNG/WebP only, 3 MB max) and
+  served with a locked-down content policy.
 
 ## Develop locally
 

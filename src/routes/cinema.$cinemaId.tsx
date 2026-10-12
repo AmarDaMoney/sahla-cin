@@ -7,35 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchCinema, fetchPublishedScreenings } from "@/lib/api";
-import { t } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n";
+import { pageHead } from "@/lib/i18n/meta";
 
 export const Route = createFileRoute("/cinema/$cinemaId")({
-  head: () => ({
-    meta: [
-      { title: "Programme du cinéma — BookCinéDZ" },
-      {
-        name: "description",
-        content: "Adresse, salles, itinéraire et séances à venir de ce cinéma en Algérie.",
-      },
-      { property: "og:title", content: "Fiche cinéma — BookCinéDZ" },
-      { property: "og:description", content: "Séances à venir et informations pratiques." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-    ],
-  }),
+  head: pageHead("cinema"),
   component: CinemaPage,
-});
-
-const dayFmt = new Intl.DateTimeFormat("fr-FR", {
-  timeZone: "Africa/Algiers",
-  weekday: "short",
-  day: "numeric",
-  month: "short",
-});
-const timeFmt = new Intl.DateTimeFormat("fr-FR", {
-  timeZone: "Africa/Algiers",
-  hour: "2-digit",
-  minute: "2-digit",
 });
 
 function mapsLink(cinema: {
@@ -52,6 +29,7 @@ function mapsLink(cinema: {
 
 function CinemaPage() {
   const { cinemaId } = Route.useParams();
+  const { t, date, title, city } = useI18n();
   const cinema = useQuery({
     queryKey: ["cinema", cinemaId],
     queryFn: () => fetchCinema({ data: cinemaId }),
@@ -71,7 +49,7 @@ function CinemaPage() {
             to="/cinemas"
             className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
           >
-            <ArrowLeft className="size-4" />
+            <ArrowLeft className="size-4 rtl:rotate-180" />
             {t.common.back}
           </Link>
         }
@@ -85,7 +63,7 @@ function CinemaPage() {
               <h1 className="text-xl font-bold">{cinema.data.name}</h1>
               <p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground">
                 <MapPin className="size-4" />
-                {cinema.data.address ?? cinema.data.city?.name}
+                {cinema.data.address ?? (cinema.data.city ? city(cinema.data.city) : "")}
               </p>
               {cinema.data.description && (
                 <p className="mt-2 text-sm text-muted-foreground">{cinema.data.description}</p>
@@ -93,7 +71,7 @@ function CinemaPage() {
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {(cinema.data.halls ?? []).map((h) => (
                   <Badge key={h.id} variant="secondary" className="rounded-full font-normal">
-                    {h.name} · {h.capacity} {t.cinema.capacity}
+                    {h.name} · {t.cinema.seats(h.capacity)}
                     {h.type === "vip" ? " · VIP" : ""}
                   </Badge>
                 ))}
@@ -123,9 +101,9 @@ function CinemaPage() {
               className="flex items-center justify-between rounded-2xl border border-border bg-card p-4 transition-colors hover:border-primary/50"
             >
               <div className="min-w-0">
-                <p className="truncate font-medium">{s.movie.title}</p>
+                <p className="truncate font-medium">{title(s.movie)}</p>
                 <p className="text-xs text-muted-foreground">
-                  {dayFmt.format(new Date(s.starts_at))} · {timeFmt.format(new Date(s.starts_at))} ·{" "}
+                  {date(s.starts_at, "dayShort")} · {date(s.starts_at, "time")} ·{" "}
                   {t.languages[s.audio_language]} · {s.hall.name}
                 </p>
               </div>

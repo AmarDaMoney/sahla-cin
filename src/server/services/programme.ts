@@ -32,7 +32,7 @@ async function managedCinemaIds(db: Db, viewer: Viewer): Promise<string[] | "all
 async function assertManagesCinema(db: Db, viewer: Viewer, cinemaId: string) {
   const ids = await managedCinemaIds(db, viewer);
   if (ids !== "all" && !ids.includes(cinemaId)) {
-    throw new AppError("FORBIDDEN", "Vous ne gérez pas ce cinéma");
+    throw new AppError("NOT_YOUR_CINEMA", "Vous ne gérez pas ce cinéma");
   }
 }
 
@@ -41,7 +41,7 @@ async function cinemaOfHall(db: Db, hallId: string) {
     .select({ cinema_id: halls.cinema_id })
     .from(halls)
     .where(eq(halls.id, hallId));
-  if (!hall) throw new AppError("NOT_FOUND", "Salle introuvable");
+  if (!hall) throw new AppError("HALL_NOT_FOUND", "Salle introuvable");
   return hall.cinema_id;
 }
 
@@ -85,7 +85,7 @@ export async function createScreening(
   const startsAt = parseAlgiersLocal(input.startsAtLocal);
   if (startsAt <= now) throw new AppError("PAST_DATE", "La séance doit être dans le futur");
   const movie = await db.query.movies.findFirst({ where: (m, { eq }) => eq(m.id, input.movieId) });
-  if (!movie) throw new AppError("NOT_FOUND", "Film introuvable");
+  if (!movie) throw new AppError("MOVIE_NOT_FOUND", "Film introuvable");
 
   const [row] = await db
     .insert(screenings)
@@ -111,13 +111,14 @@ export async function setScreeningStatus(
 ) {
   if (!ids.length) return 0;
   if (!isAdmin(viewer)) {
-    if (status !== "en_revue") throw new AppError("FORBIDDEN", "Seul un administrateur publie");
+    if (status !== "en_revue")
+      throw new AppError("ADMIN_ONLY_PUBLISH", "Seul un administrateur publie");
     const rows = await db.query.screenings.findMany({
       where: inArray(screenings.id, ids),
       columns: { id: true, status: true },
       with: { hall: { columns: { cinema_id: true } } },
     });
-    if (rows.length !== ids.length) throw new AppError("NOT_FOUND", "Séance introuvable");
+    if (rows.length !== ids.length) throw new AppError("SCREENING_NOT_FOUND", "Séance introuvable");
     for (const r of rows) {
       await assertManagesCinema(db, viewer, r.hall.cinema_id);
       if (r.status !== "brouillon") {
@@ -139,11 +140,14 @@ export async function deleteScreening(db: Db, viewer: Viewer, id: string) {
     columns: { id: true, status: true },
     with: { hall: { columns: { cinema_id: true } } },
   });
-  if (!s) throw new AppError("NOT_FOUND", "Séance introuvable");
+  if (!s) throw new AppError("SCREENING_NOT_FOUND", "Séance introuvable");
   if (!isAdmin(viewer)) {
     await assertManagesCinema(db, viewer, s.hall.cinema_id);
     if (s.status === "publie") {
-      throw new AppError("FORBIDDEN", "Une séance publiée ne peut être supprimée que par un admin");
+      throw new AppError(
+        "PUBLISHED_DELETE_ADMIN",
+        "Une séance publiée ne peut être supprimée que par un admin",
+      );
     }
   }
   const [hasBookings] = await db

@@ -4,8 +4,10 @@ import type { Db } from "./db/client";
 import { getDb } from "./db/client";
 import * as schema from "./db/schema";
 import { AppError } from "@/lib/errors";
-import { appUrl, authSecret, envValue } from "./config";
+import { appUrl, authSecret, clientIpHeaders, envValue } from "./config";
+import { DEFAULT_LANG, langFromHeaders } from "@/lib/i18n/lang";
 import { actionEmail, sendEmail } from "./email";
+import { EMAIL_TEXTS } from "./email-texts";
 
 // Authentification : e-mail + mot de passe (adresse vérifiée obligatoire),
 // réinitialisation du mot de passe, Google (si configuré). Les sessions sont
@@ -32,11 +34,9 @@ export function createAuth(db: Db) {
     advanced: {
       database: { generateId: "uuid" },
       // En-tête contenant l'IP réelle du visiteur, posé par le proxy de
-      // l'hébergeur (sert à limiter les tentatives de connexion par IP).
-      // Railway : X-Real-IP. À vérifier/adapter via CLIENT_IP_HEADER.
-      ipAddress: {
-        ipAddressHeaders: [(envValue("CLIENT_IP_HEADER") || "x-real-ip").toLowerCase()],
-      },
+      // l'hébergeur (limite les tentatives de connexion par visiteur).
+      // /api/health indique si cet en-tête est bien reçu.
+      ipAddress: { ipAddressHeaders: clientIpHeaders() },
     },
     emailAndPassword: {
       enabled: true,
@@ -44,14 +44,17 @@ export function createAuth(db: Db) {
       minPasswordLength: 8,
       maxPasswordLength: 128,
       revokeSessionsOnPasswordReset: true,
-      sendResetPassword: async ({ user, url }) => {
+      sendResetPassword: async ({ user, url }, request) => {
+        const lang = request ? langFromHeaders(request.headers) : DEFAULT_LANG;
+        const t = EMAIL_TEXTS[lang].reset;
         await sendEmail(
           actionEmail({
             to: user.email,
-            subject: "Réinitialisation de votre mot de passe",
-            intro: "Vous avez demandé à changer le mot de passe de votre compte BookCinéDZ.",
-            action: "Choisir un nouveau mot de passe",
+            subject: t.subject,
+            intro: t.intro,
+            action: t.action,
             url,
+            lang,
           }),
         );
       },
@@ -59,14 +62,17 @@ export function createAuth(db: Db) {
     emailVerification: {
       sendOnSignUp: true,
       autoSignInAfterVerification: true,
-      sendVerificationEmail: async ({ user, url }) => {
+      sendVerificationEmail: async ({ user, url }, request) => {
+        const lang = request ? langFromHeaders(request.headers) : DEFAULT_LANG;
+        const t = EMAIL_TEXTS[lang].verify;
         await sendEmail(
           actionEmail({
             to: user.email,
-            subject: "Confirmez votre adresse e-mail",
-            intro: `Bienvenue ${user.name} ! Confirmez votre adresse pour activer votre compte BookCinéDZ.`,
-            action: "Confirmer mon adresse",
+            subject: t.subject,
+            intro: t.intro(user.name),
+            action: t.action,
             url,
+            lang,
           }),
         );
       },
@@ -81,7 +87,7 @@ export function createAuth(db: Db) {
       window: 60,
       max: 100,
       customRules: {
-        "/sign-in/email": { window: 60, max: 5 },
+        "/sign-in/email": { window: 60, max: 10 },
         "/sign-up/email": { window: 3600, max: 5 },
         "/request-password-reset": { window: 3600, max: 3 },
         "/send-verification-email": { window: 3600, max: 3 },

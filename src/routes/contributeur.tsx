@@ -27,39 +27,19 @@ import {
   setScreeningStatus,
   type AudioLanguage,
 } from "@/lib/api";
-import { t } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n";
+import { pageHead } from "@/lib/i18n/meta";
 
 export const Route = createFileRoute("/contributeur")({
-  head: () => ({
-    meta: [
-      { title: "Espace contributeur — BookCinéDZ" },
-      {
-        name: "description",
-        content:
-          "Saisissez le programme hebdomadaire de votre cinéma et soumettez-le à validation.",
-      },
-      { property: "og:title", content: "Espace contributeur — BookCinéDZ" },
-      { property: "og:description", content: "Gestion du programme d'un cinéma partenaire." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-      { name: "robots", content: "noindex" },
-    ],
-  }),
+  head: pageHead("contributor", { noindex: true }),
   component: Contributor,
 });
 
 const languages: AudioLanguage[] = ["VO", "VF", "VOSTFR", "VOSTAR", "AR_DUB"];
-const fmt = new Intl.DateTimeFormat("fr-FR", {
-  timeZone: "Africa/Algiers",
-  weekday: "short",
-  day: "numeric",
-  month: "short",
-  hour: "2-digit",
-  minute: "2-digit",
-});
 
 function Contributor() {
   const { user, isContributor, loading } = useAuth();
+  const { t, date, title, error } = useI18n();
   const queryClient = useQueryClient();
   const [cinemaId, setCinemaId] = useState<string>("");
   const [hallId, setHallId] = useState("");
@@ -85,7 +65,7 @@ function Contributor() {
 
   async function add() {
     if (!hallId || !movieId || !startsAt) {
-      toast.error("Complétez la salle, le film et l'horaire.");
+      toast.error(t.contributor.incomplete);
       return;
     }
     try {
@@ -99,11 +79,11 @@ function Contributor() {
           audioLanguage: lang,
         },
       });
-      toast.success("Séance ajoutée en brouillon");
+      toast.success(t.contributor.added);
       setStartsAt("");
       await queryClient.invalidateQueries({ queryKey: ["cinema-screenings"] });
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erreur");
+      toast.error(error(e));
     }
   }
 
@@ -115,7 +95,7 @@ function Contributor() {
       toast.success(t.contributor.submitted);
       await queryClient.invalidateQueries({ queryKey: ["cinema-screenings"] });
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erreur");
+      toast.error(error(e));
     }
   }
 
@@ -124,9 +104,7 @@ function Contributor() {
       <div className="min-h-screen pb-24">
         <AppHeader />
         <main className="mx-auto max-w-3xl px-4 py-16 text-center">
-          <p className="text-sm text-muted-foreground">
-            Cet espace est réservé aux contributeurs des cinémas partenaires.
-          </p>
+          <p className="text-sm text-muted-foreground">{t.common.restricted.contributor}</p>
           <Button asChild className="mt-4 rounded-xl">
             <Link to="/compte">{t.nav.account}</Link>
           </Button>
@@ -170,10 +148,10 @@ function Contributor() {
               </h2>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label>Salle</Label>
+                  <Label>{t.contributor.hall}</Label>
                   <Select value={hallId} onValueChange={setHallId}>
                     <SelectTrigger className="rounded-xl">
-                      <SelectValue placeholder="Choisir une salle" />
+                      <SelectValue placeholder={t.contributor.chooseHall} />
                     </SelectTrigger>
                     <SelectContent>
                       {current.halls.map((h) => (
@@ -185,22 +163,22 @@ function Contributor() {
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Film</Label>
+                  <Label>{t.contributor.movie}</Label>
                   <Select value={movieId} onValueChange={setMovieId}>
                     <SelectTrigger className="rounded-xl">
-                      <SelectValue placeholder="Choisir un film" />
+                      <SelectValue placeholder={t.contributor.chooseMovie} />
                     </SelectTrigger>
                     <SelectContent>
                       {(movies.data ?? []).map((m) => (
                         <SelectItem key={m.id} value={m.id}>
-                          {m.title}
+                          {title(m)}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="starts">Date & heure</Label>
+                  <Label htmlFor="starts">{t.contributor.dateTime}</Label>
                   <Input
                     id="starts"
                     type="datetime-local"
@@ -223,7 +201,7 @@ function Contributor() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Version</Label>
+                  <Label>{t.contributor.version}</Label>
                   <Select value={lang} onValueChange={(v) => setLang(v as AudioLanguage)}>
                     <SelectTrigger className="rounded-xl">
                       <SelectValue />
@@ -262,19 +240,15 @@ function Contributor() {
                     className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-3"
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{s.movie.title}</p>
+                      <p className="truncate text-sm font-medium">{title(s.movie)}</p>
                       <p className="text-xs text-muted-foreground">
-                        {fmt.format(new Date(s.starts_at))} · {s.hall.name} ·{" "}
+                        {date(s.starts_at, "medium")} · {s.hall.name} ·{" "}
                         {t.languages[s.audio_language]} · {s.price} {t.common.da}
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       <Badge variant={s.status === "publie" ? "default" : "secondary"}>
-                        {s.status === "publie"
-                          ? "Publié"
-                          : s.status === "en_revue"
-                            ? "En revue"
-                            : "Brouillon"}
+                        {t.status[s.status]}
                       </Badge>
                       {s.status !== "publie" && (
                         <Button
@@ -288,7 +262,7 @@ function Contributor() {
                                 queryKey: ["cinema-screenings"],
                               });
                             } catch (e) {
-                              toast.error(e instanceof Error ? e.message : "Erreur");
+                              toast.error(error(e));
                             }
                           }}
                         >
@@ -299,7 +273,7 @@ function Contributor() {
                   </div>
                 ))}
                 {screenings.data?.length === 0 && (
-                  <p className="text-sm text-muted-foreground">Aucune séance pour l'instant.</p>
+                  <p className="text-sm text-muted-foreground">{t.contributor.empty}</p>
                 )}
               </div>
             </section>

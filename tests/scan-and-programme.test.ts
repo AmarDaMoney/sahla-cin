@@ -90,7 +90,7 @@ describe("scanTicket", () => {
     const u = await createUser(db, "client@example.com");
     const t = await ticket(HOUR);
     await expect(scanTicket(db, viewerOf(u), t.qrCode)).rejects.toMatchObject({
-      code: "FORBIDDEN",
+      code: "NOT_AGENT",
     });
   });
 });
@@ -113,20 +113,20 @@ describe("programme", () => {
     };
     expect(await listManagedCinemas(db, contributor)).toHaveLength(0);
     await expect(createScreening(db, contributor, input)).rejects.toMatchObject({
-      code: "FORBIDDEN",
+      code: "NOT_YOUR_CINEMA",
     });
 
     await db.insert(cinema_staff).values({ user_id: u.id, cinema_id: venue.cinemaA.id });
     const { id } = await createScreening(db, contributor, input);
     await expect(
       createScreening(db, contributor, { ...input, hallId: venue.hallB.id }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    ).rejects.toMatchObject({ code: "NOT_YOUR_CINEMA" });
     await expect(
       createScreening(db, contributor, { ...input, startsAtLocal: "2000-01-01T20:00" }),
     ).rejects.toMatchObject({ code: "PAST_DATE" });
 
     await expect(setScreeningStatus(db, contributor, [id], "publie")).rejects.toMatchObject({
-      code: "FORBIDDEN",
+      code: "ADMIN_ONLY_PUBLISH",
     });
     expect(await setScreeningStatus(db, contributor, [id], "en_revue")).toBe(1);
     await expect(setScreeningStatus(db, contributor, [id], "en_revue")).rejects.toMatchObject({
@@ -136,7 +136,7 @@ describe("programme", () => {
     const admin = viewerOf(await createUser(db, "admin@example.com"), ["admin"]);
     expect(await setScreeningStatus(db, admin, [id], "publie")).toBe(1);
     await expect(deleteScreening(db, contributor, id)).rejects.toMatchObject({
-      code: "FORBIDDEN",
+      code: "PUBLISHED_DELETE_ADMIN",
     });
   });
 
@@ -163,7 +163,7 @@ describe("admin", () => {
     const u = await createUser(db, "Agent@Example.com");
     await expect(
       grantRole(db, { email: "nobody@example.com", role: "admin" }),
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    ).rejects.toMatchObject({ code: "USER_NOT_FOUND" });
     await expect(
       grantRole(db, { email: "agent@example.com", role: "agent_guichet" }),
     ).rejects.toMatchObject({ code: "CINEMA_REQUIRED" });

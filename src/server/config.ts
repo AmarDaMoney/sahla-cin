@@ -56,6 +56,17 @@ export function authSecret(): string | undefined {
   return secret.length >= 32 && !isExampleValue(secret) ? secret : undefined;
 }
 
+// En-têtes où l'hébergeur indique l'IP réelle du visiteur (limitation des
+// tentatives de connexion par visiteur). CLIENT_IP_HEADER force un en-tête précis.
+export function clientIpHeaders(): string[] {
+  const forced = env("CLIENT_IP_HEADER").toLowerCase();
+  return forced ? [forced] : ["x-real-ip", "x-forwarded-for", "cf-connecting-ip"];
+}
+
+export function hasClientIp(headers: Headers): boolean {
+  return clientIpHeaders().some((h) => !!headers.get(h)?.trim());
+}
+
 export type ConfigCheck = { name: string; ok: boolean; required: boolean; hint: string };
 
 // Liste des réglages, sans jamais exposer leurs valeurs.

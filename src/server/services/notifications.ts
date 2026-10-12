@@ -3,18 +3,11 @@ import { eq } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { bookings, user } from "../db/schema";
 import { appUrl } from "../config";
+import { DEFAULT_LANG, formatDate, localized, type Lang } from "@/lib/i18n/lang";
 import { actionEmail, sendEmail } from "../email";
+import { EMAIL_TEXTS } from "../email-texts";
 
-const when = new Intl.DateTimeFormat("fr-FR", {
-  timeZone: "Africa/Algiers",
-  weekday: "long",
-  day: "numeric",
-  month: "long",
-  hour: "2-digit",
-  minute: "2-digit",
-});
-
-export async function sendBookingEmail(db: Db, bookingId: string) {
+export async function sendBookingEmail(db: Db, bookingId: string, lang: Lang = DEFAULT_LANG) {
   const b = await db.query.bookings.findFirst({
     where: eq(bookings.id, bookingId),
     with: {
@@ -27,27 +20,29 @@ export async function sendBookingEmail(db: Db, bookingId: string) {
   const [owner] = await db.select().from(user).where(eq(user.id, b.user_id));
   if (!owner) return;
 
+  const t = EMAIL_TEXTS[lang].booking;
   const seats = b.booking_seats.map((s) => `${s.seat.row_label}${s.seat.seat_number}`).join(", ");
   const { screening } = b;
   const paid = b.status === "confirme";
   const intro =
-    `${screening.movie.title} — ${screening.hall.cinema.name}, ${screening.hall.name}, ` +
-    `${when.format(screening.starts_at)}. Sièges : ${seats}. Total : ${b.total_amount} DA ` +
-    (paid ? "(payé)." : "(à régler au guichet au plus tard 15 min avant la séance).") +
-    ` Référence : ${b.ticket.qr_code}. Présentez le QR code de votre billet à l'entrée.`;
+    `${localized(screening.movie, "title", lang)} — ${screening.hall.cinema.name}, ` +
+    `${screening.hall.name}, ${formatDate(lang, screening.starts_at, "full")}. ` +
+    `${t.seats} : ${seats}. ${t.total} : ${b.total_amount} ${t.currency} ` +
+    `(${paid ? t.paid : t.pending}). ${t.reference} : ${b.ticket.qr_code}. ${t.show}`;
 
   await sendEmail(
     actionEmail({
       to: owner.email,
-      subject: paid ? "Votre billet BookCinéDZ" : "Votre réservation BookCinéDZ",
+      subject: paid ? t.subjectPaid : t.subjectPending,
       intro,
-      action: "Voir mon billet",
+      action: t.action,
       url: `${appUrl() ?? ""}/tickets`,
+      lang,
     }),
   );
 }
 
 // L'e-mail ne doit jamais faire échouer une réservation.
-export function notifyBooking(db: Db, bookingId: string) {
-  sendBookingEmail(db, bookingId).catch((e) => console.error("[email] récapitulatif", e));
+export function notifyBooking(db: Db, bookingId: string, lang: Lang = DEFAULT_LANG) {
+  sendBookingEmail(db, bookingId, lang).catch((e) => console.error("[email] récapitulatif", e));
 }

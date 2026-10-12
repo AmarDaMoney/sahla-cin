@@ -24,7 +24,8 @@ const serverFnErrors = createMiddleware({ type: "function" }).server(async ({ ne
   try {
     return await next();
   } catch (error) {
-    if (error instanceof AppError) throw new Error(error.message);
+    // Le code permet au navigateur d'afficher le message dans la langue choisie.
+    if (error instanceof AppError) throw new Error(`[${error.code}] ${error.message}`);
     console.error(error);
     throw new Error("Une erreur est survenue. Réessayez plus tard.");
   }

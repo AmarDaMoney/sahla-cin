@@ -20,23 +20,11 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { useAuth } from "@/hooks/useAuth";
-import { t } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n";
+import { pageHead } from "@/lib/i18n/meta";
 
 export const Route = createFileRoute("/compte")({
-  head: () => ({
-    meta: [
-      { title: "Mon compte — BookCinéDZ" },
-      {
-        name: "description",
-        content:
-          "Gérez votre compte BookCinéDZ, accédez aux espaces contributeur, administrateur et au contrôle des billets.",
-      },
-      { property: "og:title", content: "Mon compte — BookCinéDZ" },
-      { property: "og:description", content: "Compte, rôles et informations légales." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-    ],
-  }),
+  head: pageHead("account"),
   component: Account,
 });
 
@@ -45,6 +33,7 @@ const whatsapp = import.meta.env["VITE_WHATSAPP_NUMBER"] as string | undefined;
 
 function Account() {
   const { user, roles, isAdmin, isContributor, isAgent, signOut } = useAuth();
+  const { t } = useI18n();
 
   return (
     <div className="min-h-screen pb-24">
@@ -116,7 +105,7 @@ function Account() {
             <Button asChild variant="outline" className="w-full justify-start rounded-xl">
               <a href={`https://wa.me/${whatsapp}`} target="_blank" rel="noopener noreferrer">
                 <MessageCircle className="size-4 text-primary" />
-                Signaler une erreur sur WhatsApp
+                {t.account.contact}
               </a>
             </Button>
           </div>
@@ -130,25 +119,21 @@ function Account() {
           <AccordionItem value="about">
             <AccordionTrigger className="text-sm">
               <span className="flex items-center gap-2">
-                <Info className="size-4 text-primary" /> À propos
+                <Info className="size-4 text-primary" /> {t.account.about}
               </span>
             </AccordionTrigger>
             <AccordionContent className="text-sm text-muted-foreground">
-              BookCinéDZ centralise le programme des salles de cinéma algériennes et la réservation
-              de billets. Les programmes sont saisis par les cinémas partenaires puis validés par
-              notre équipe avant publication.
+              {t.account.aboutText}
             </AccordionContent>
           </AccordionItem>
           <AccordionItem value="legal" className="border-b-0">
             <AccordionTrigger className="text-sm">
               <span className="flex items-center gap-2">
-                <FileText className="size-4 text-primary" /> Mentions légales
+                <FileText className="size-4 text-primary" /> {t.account.legal}
               </span>
             </AccordionTrigger>
             <AccordionContent className="text-sm text-muted-foreground">
-              Les billets réservés sont nominatifs et valables uniquement pour la séance indiquée.
-              Un billet déjà scanné ne peut plus être réutilisé. Les données personnelles sont
-              utilisées uniquement pour la gestion des réservations.
+              {t.account.legalText}
             </AccordionContent>
           </AccordionItem>
         </Accordion>

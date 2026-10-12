@@ -5,18 +5,8 @@
 
 export type PaymentMethodId = "cib" | "baridimob" | "dahabia" | "espece";
 
-export type PaymentMethod = {
-  id: PaymentMethodId;
-  label: string;
-  hint: string;
-};
-
-export const paymentMethods: PaymentMethod[] = [
-  { id: "cib", label: "Carte CIB", hint: "Paiement par carte interbancaire" },
-  { id: "baridimob", label: "BaridiMob", hint: "Algérie Poste — paiement mobile" },
-  { id: "dahabia", label: "Carte Edahabia", hint: "Algérie Poste" },
-  { id: "espece", label: "Paiement au guichet", hint: "Réservez, payez sur place" },
-];
+// Libellés : dictionnaires de langue (t.payments[id]).
+export const paymentMethods: PaymentMethodId[] = ["cib", "baridimob", "dahabia", "espece"];
 
 export type PaymentStart =
   // Paiement confirmé immédiatement (mode simulation).

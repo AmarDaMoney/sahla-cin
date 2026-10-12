@@ -36,9 +36,12 @@ export type MovieInput = {
   id?: string | undefined;
   title: string;
   title_ar: string | null;
+  title_en: string | null;
   duration_minutes: number;
   genre: string | null;
   synopsis: string | null;
+  synopsis_ar: string | null;
+  synopsis_en: string | null;
   poster_url: string | null;
   trailer_url: string | null;
   age_rating: string | null;
@@ -49,7 +52,7 @@ export async function upsertMovie(db: Db, input: MovieInput) {
   const [row] = id
     ? await db.update(movies).set(values).where(eq(movies.id, id)).returning({ id: movies.id })
     : await db.insert(movies).values(values).returning({ id: movies.id });
-  if (!row) throw new AppError("NOT_FOUND", "Film introuvable");
+  if (!row) throw new AppError("MOVIE_NOT_FOUND", "Film introuvable");
   return row;
 }
 
@@ -58,7 +61,7 @@ export async function createCity(db: Db, name: string) {
     const [row] = await db.insert(cities).values({ name }).returning({ id: cities.id });
     return row!;
   } catch (e) {
-    if (isUniqueViolation(e)) throw new AppError("DUPLICATE", "Cette ville existe déjà");
+    if (isUniqueViolation(e)) throw new AppError("CITY_EXISTS", "Cette ville existe déjà");
     throw e;
   }
 }
@@ -107,7 +110,7 @@ export async function createHall(
     });
   } catch (e) {
     if (isUniqueViolation(e)) {
-      throw new AppError("DUPLICATE", "Une salle porte déjà ce nom dans ce cinéma");
+      throw new AppError("HALL_EXISTS", "Une salle porte déjà ce nom dans ce cinéma");
     }
     throw e;
   }
@@ -118,7 +121,7 @@ async function userIdByEmail(db: Db, email: string) {
     .select({ id: user.id })
     .from(user)
     .where(eq(sql`lower(${user.email})`, email.trim().toLowerCase()));
-  if (!u) throw new AppError("NOT_FOUND", "Aucun compte avec cet e-mail");
+  if (!u) throw new AppError("USER_NOT_FOUND", "Aucun compte avec cet e-mail");
   return u.id;
 }
 

@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
 import { authErrorMessage } from "@/lib/auth-errors";
-import { t } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n";
+import { pageHead } from "@/lib/i18n/meta";
 
 // Page ouverte depuis le lien « mot de passe oublié » reçu par e-mail.
 export const Route = createFileRoute("/reinitialiser")({
@@ -15,14 +16,13 @@ export const Route = createFileRoute("/reinitialiser")({
     token: typeof search["token"] === "string" ? (search["token"] as string) : "",
     error: typeof search["error"] === "string" ? (search["error"] as string) : "",
   }),
-  head: () => ({
-    meta: [{ title: "Nouveau mot de passe — BookCinéDZ" }, { name: "robots", content: "noindex" }],
-  }),
+  head: pageHead("reset", { noindex: true }),
   component: ResetPasswordPage,
 });
 
 function ResetPasswordPage() {
   const { token, error } = Route.useSearch();
+  const { t, lang } = useI18n();
   const navigate = useNavigate();
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -32,7 +32,7 @@ function ResetPasswordPage() {
     setBusy(true);
     try {
       const res = await authClient.resetPassword({ newPassword: password, token });
-      if (res.error) return void toast.error(authErrorMessage(res.error));
+      if (res.error) return void toast.error(authErrorMessage(res.error, lang));
       toast.success(t.auth.resetDone);
       navigate({ to: "/auth", search: { redirect: "/" } });
     } finally {

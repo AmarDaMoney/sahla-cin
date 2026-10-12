@@ -17,26 +17,11 @@ import { AppHeader } from "@/components/AppHeader";
 import { BottomNav } from "@/components/BottomNav";
 import { MoviePoster } from "@/components/MoviePoster";
 import { fetchCities, fetchPublishedScreenings, type ScreeningFull } from "@/lib/api";
-import { t } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n";
+import { pageHead } from "@/lib/i18n/meta";
 
 export const Route = createFileRoute("/")({
-  head: () => ({
-    meta: [
-      { title: "BookCinéDZ — Films à l'affiche et réservation en Algérie" },
-      {
-        name: "description",
-        content:
-          "Programme des cinémas d'Alger, Oran et Constantine : recherche par titre français ou arabe, genre et cinéma, séances VO/VF/VOSTFR et réservation en ligne.",
-      },
-      { property: "og:title", content: "BookCinéDZ — Films à l'affiche" },
-      {
-        property: "og:description",
-        content: "Consultez le programme des cinémas algériens et réservez votre place.",
-      },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-    ],
-  }),
+  head: pageHead("home"),
   component: Index,
 });
 
@@ -54,6 +39,7 @@ function normalize(value: string) {
 }
 
 function Index() {
+  const { t, title, subtitle, city, genres, rating } = useI18n();
   const [query, setQuery] = useState("");
   const [cityId, setCityId] = useState("all");
   const [cinemaId, setCinemaId] = useState("all");
@@ -113,6 +99,7 @@ function Index() {
           !q ||
           normalize(s.movie.title).includes(q) ||
           normalize(s.movie.title_ar ?? "").includes(q) ||
+          normalize(s.movie.title_en ?? "").includes(q) ||
           normalize(s.movie.genre ?? "").includes(q) ||
           normalize(s.hall.cinema.name).includes(q),
       )
@@ -121,8 +108,8 @@ function Index() {
         if (entry) entry.count += 1;
         else grouped.set(s.movie.id, { movie: s.movie, count: 1 });
       });
-    return [...grouped.values()].sort((a, b) => a.movie.title.localeCompare(b.movie.title));
-  }, [list, query, cityId, cinemaId, genre]);
+    return [...grouped.values()].sort((a, b) => title(a.movie).localeCompare(title(b.movie)));
+  }, [list, query, cityId, cinemaId, genre, title]);
 
   const activeFilters =
     (cityId !== "all" ? 1 : 0) + (cinemaId !== "all" ? 1 : 0) + (genre !== "all" ? 1 : 0);
@@ -145,7 +132,7 @@ function Index() {
               setCinemaId("all");
             }}
           >
-            <SelectTrigger className="w-[150px] rounded-full border-border bg-card">
+            <SelectTrigger className="w-[136px] rounded-full border-border bg-card">
               <MapPin className="size-4 text-primary" />
               <SelectValue />
             </SelectTrigger>
@@ -153,7 +140,7 @@ function Index() {
               <SelectItem value="all">{t.common.allCities}</SelectItem>
               {(cities.data ?? []).map((c) => (
                 <SelectItem key={c.id} value={c.id}>
-                  {c.name}
+                  {city(c)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -164,25 +151,25 @@ function Index() {
       <main className="mx-auto max-w-3xl px-4">
         <section className="hero-fade -mx-4 px-4 pb-4 pt-6">
           <h1 className="text-2xl font-bold tracking-tight">
-            {t.home.title} <span className="text-primary">en Algérie</span>
+            {t.home.title} <span className="text-primary">{t.home.titleAccent}</span>
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">{t.home.subtitle}</p>
 
           <div className="relative mt-4">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={t.home.search}
-              className="rounded-full border-border bg-card pl-9 pr-9"
+              className="rounded-full border-border bg-card ps-9 pe-9"
               aria-label={t.home.search}
             />
             {query && (
               <button
                 type="button"
                 onClick={() => setQuery("")}
-                aria-label="Effacer la recherche"
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label={t.home.clearSearch}
+                className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
                 <X className="size-4" />
               </button>
@@ -200,7 +187,7 @@ function Index() {
               <SlidersHorizontal className="size-4 text-primary" />
               {t.home.filters}
               {activeFilters > 0 && (
-                <Badge className="ml-1 rounded-full px-1.5 py-0 text-[10px]">{activeFilters}</Badge>
+                <Badge className="ms-1 rounded-full px-1.5 py-0 text-[10px]">{activeFilters}</Badge>
               )}
             </Button>
             {(activeFilters > 0 || query) && (
@@ -241,7 +228,7 @@ function Index() {
                   <SelectItem value="all">{t.home.allGenres}</SelectItem>
                   {genreOptions.map((g) => (
                     <SelectItem key={g} value={g}>
-                      {g}
+                      {t.genres[g] ?? g}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -255,10 +242,7 @@ function Index() {
             [0, 1, 2].map((i) => <Skeleton key={i} className="h-32 w-full rounded-2xl" />)}
 
           {!screenings.isLoading && movies.length > 0 && (
-            <p className="text-xs text-muted-foreground">
-              {movies.length} {t.home.results}
-              {movies.length > 1 ? "s" : ""}
-            </p>
+            <p className="text-xs text-muted-foreground">{t.home.results(movies.length)}</p>
           )}
 
           {!screenings.isLoading && movies.length === 0 && (
@@ -274,14 +258,14 @@ function Index() {
             >
               <MoviePoster
                 src={movie.poster_url}
-                alt={`Affiche du film ${movie.title}`}
+                alt={t.common.posterOf(title(movie))}
                 className="h-32 w-22 shrink-0 rounded-xl transition-transform duration-500 group-hover:scale-[1.03]"
               />
               <div className="min-w-0 flex-1 py-0.5">
-                <h2 className="truncate font-semibold leading-tight">{movie.title}</h2>
-                {movie.title_ar && (
-                  <p dir="rtl" className="truncate text-sm text-muted-foreground">
-                    {movie.title_ar}
+                <h2 className="truncate font-semibold leading-tight">{title(movie)}</h2>
+                {subtitle(movie) && (
+                  <p dir="auto" className="truncate text-sm text-muted-foreground">
+                    {subtitle(movie)}
                   </p>
                 )}
                 <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
@@ -289,25 +273,21 @@ function Index() {
                     <Clock className="size-3.5" />
                     {movie.duration_minutes} {t.common.minutes}
                   </span>
-                  {movie.age_rating && <span>{movie.age_rating}</span>}
+                  {movie.age_rating && <span>{rating(movie.age_rating)}</span>}
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1.5">
-                  {(movie.genre ?? "")
-                    .split(",")
-                    .map((g) => g.trim())
-                    .filter(Boolean)
-                    .map((g) => (
-                      <Badge
-                        key={g}
-                        variant="secondary"
-                        className="rounded-full text-[11px] font-normal"
-                      >
-                        {g}
-                      </Badge>
-                    ))}
+                  {genres(movie.genre).map((g) => (
+                    <Badge
+                      key={g.key}
+                      variant="secondary"
+                      className="rounded-full text-[11px] font-normal"
+                    >
+                      {g.label}
+                    </Badge>
+                  ))}
                 </div>
                 <p className="mt-2 text-xs font-medium text-primary">
-                  {count} séance{count > 1 ? "s" : ""} disponible{count > 1 ? "s" : ""}
+                  {t.home.screeningsAvailable(count)}
                 </p>
               </div>
             </Link>
